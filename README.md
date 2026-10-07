@@ -20,15 +20,17 @@ Supplier → Purchase Order → Inventory (movement ledger) → Sales Order → 
 
 Depth is concentrated on **orders, inventory, and finance**. All other modules are honest and shallow. See `docs/development/roadmap.md` for the phased plan and `docs/domain/business-rules.md` for the rules that make this more than CRUD.
 
-## Quick start (target, Phase 0)
+## Quick start
 
 ```sh
-docker compose up -d      # postgres
-./mvnw spring-boot:run    # :8080
-npm run dev --workspace web  # :3000
+docker compose up -d      # postgres (healthcheck; data persists in the db-data volume)
+./mvnw spring-boot:run    # backend on :8080 — verify with GET /actuator/health
+./mvnw test               # integration tests against Testcontainers PostgreSQL (never H2)
 ```
 
-Seeded admin comes from env vars (`ADMIN_EMAIL` / `ADMIN_PASSWORD`). See `docs/development/roadmap.md` Phase 0 for the walking-slice definition.
+Backend environment overrides: `DB_URL` / `DB_USER` / `DB_PASSWORD` (defaults match compose), and `SERVER_PORT` when 8080 is taken. Flyway migrates automatically on every boot; re-boots are a no-op.
+
+Frontend (`npm run dev --workspace web` → :3000) and the seeded admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) arrive with the auth and UI phases. See `docs/development/roadmap.md` for the phased plan.
 
 ## Docs
 

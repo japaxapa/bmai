@@ -13,6 +13,8 @@ REST, no `/v1` prefix (deliberate — single-client portfolio API; version when 
 ## Endpoints
 
 ```text
+ops:        GET /actuator/health — 200 {"status":"UP"} plus per-component detail
+            (show-components=always; includes db). Only health is exposed.
 auth:       POST /api/auth/login  POST /api/auth/logout  GET /api/auth/me
             PUT /api/auth/password (needs current password)
 users:      CRUD (ADMIN) + PUT /users/{id}/status
