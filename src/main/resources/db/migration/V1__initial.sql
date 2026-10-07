@@ -1,0 +1,7 @@
+-- V1: initial migration — establishes the Flyway pipeline for the project.
+--
+-- Deliberately creates no domain tables yet: each table belongs to the
+-- ticket that owns its behaviour (users arrive with the auth ticket, and so
+-- on, in the migration order documented in docs/database/database-design.md).
+-- This migration proves the pipeline end to end: applies cleanly on first
+-- run, no-op on restart, recorded in flyway_schema_history.
