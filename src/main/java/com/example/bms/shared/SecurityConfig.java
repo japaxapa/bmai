@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -45,9 +46,16 @@ import tools.jackson.databind.ObjectMapper;
  * Two chains, because a single one would let the resource server reject a bad
  * cookie (401) before authorization is even considered — which would make
  * "logout with an expired token" unanswerable.
+ *
+ * {@code @EnableMethodSecurity} is the other half of enforcement: the filter
+ * chain answers "who is calling", this one answers "what may they call".
+ * Without it every later {@code @PreAuthorize} compiles and is silently inert,
+ * while business-rules §4 (Permissions) and requirements §4 "Backend is the
+ * security boundary" both promise the rule is enforced.
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     /** Endpoints that answer without a credential, valid or not. */
