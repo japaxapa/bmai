@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -31,6 +33,34 @@ class FlywayMigrationsTest {
 
     @Autowired
     private Flyway flyway;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    /**
+     * Ticket 3, acceptance criterion 1: the seed migration creates an ADMIN
+     * user with known credentials, so the app is demoable with zero config.
+     *
+     * The hash is verified with BCrypt itself rather than compared to a stored
+     * literal: the database carries a hash we cannot recompute here, so the
+     * independent source of truth is the algorithm checking the known password.
+     */
+    @Test
+    void seedMigrationCreatesAnAdminWithKnownCredentials() {
+        var admin = jdbc.queryForMap(
+                "select password_hash, role, active from users where email = ?",
+                "admin@bms.local");
+
+        assertThat(admin.get("role")).asString()
+                .as("the seeded user owns the system")
+                .isEqualTo("ADMIN");
+        assertThat(admin.get("active"))
+                .as("a deactivated admin cannot log in")
+                .isEqualTo(true);
+        assertThat(new BCryptPasswordEncoder().matches("admin123", admin.get("password_hash").toString()))
+                .as("the documented default password verifies against the stored hash")
+                .isTrue();
+    }
 
     @Test
     void initialMigrationIsAppliedOnFirstRun() {

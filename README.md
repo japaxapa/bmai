@@ -30,7 +30,21 @@ docker compose up -d      # postgres (healthcheck; data persists in the db-data 
 
 Backend environment overrides: `DB_URL` / `DB_USER` / `DB_PASSWORD` (defaults match compose), and `SERVER_PORT` when 8080 is taken. Flyway migrates automatically on every boot; re-boots are a no-op.
 
-Frontend (`npm run dev --workspace web` → :3000) and the seeded admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) arrive with the auth and UI phases. See `docs/development/roadmap.md` for the phased plan.
+### Demo the auth (seeded admin)
+
+Migration V2 seeds an admin so a fresh clone can log in with zero configuration. The credentials below are a **local demo default — never deploy as-is**; set `ADMIN_EMAIL` / `ADMIN_PASSWORD` (applied at boot) before any shared environment.
+
+```sh
+curl -i -c jar.txt -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@bms.local","password":"admin123"}'   # 200 + Set-Cookie: access_token=…; HttpOnly
+curl -b jar.txt http://localhost:8080/api/auth/me          # {"email":"admin@bms.local","role":"ADMIN"}
+curl -i -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@bms.local","password":"wrong"}'      # 401 application/problem+json
+```
+
+The frontend (`npm run dev --workspace web` → :3000) arrives with the UI phase; CORS already allows exactly that origin with credentials (ADR 0015). See `docs/development/roadmap.md` for the phased plan.
 
 ## Docs
 

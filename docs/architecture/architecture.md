@@ -39,7 +39,7 @@ com.example.bms/
 
 ## 5. Authorization — method security (Q33)
 
-- Base URL layer: everything authenticated except login.
+- Base URL layer: everything authenticated except the endpoints that must answer without a credential: login, logout (a token that has gone bad must still be clearable), health and `/error`.
 - Write rules: `@PreAuthorize` on service methods (`@EnableMethodSecurity`). URL regex farms rejected (miss-a-line = open endpoint); domain-coupled role checks rejected.
 - Full matrix in `docs/domain/business-rules.md`. One integration test iterates role × action → allow/deny.
 

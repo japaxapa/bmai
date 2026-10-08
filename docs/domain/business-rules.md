@@ -59,4 +59,5 @@ Enforced by `@PreAuthorize` on write services; URL layer is authenticated-only. 
 ## 5. Deactivation and drafts (Q28)
 
 - Deactivated product/customer/supplier: blocked in all *new* documents; blocks **confirm** if sitting in a DRAFT; in-flight flows complete; history never rewired.
+- Deactivated **user**: the password stops authenticating — login answers the same indistinguishable `401` as any bad login (never "account disabled"). A JWT issued *before* deactivation keeps working until it expires: with no token store (ADR 0015), deactivation revokes the next login, not the current session. Users are deactivated, never deleted.
 - `document` unique per party table (DB); `email` not unique. SKU unique. Category name unique.

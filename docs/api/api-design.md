@@ -60,3 +60,5 @@ One `@RestControllerAdvice` mapping the `BusinessException` hierarchy to `Proble
 | 500 | unexpected, no stack leak | bug |
 
 Frontend: `fieldErrors` → inline form errors; everything else → toast/banner.
+
+**Exception — `POST /api/auth/login` never returns 400.** A missing or malformed credential field answers the same `401` + `problem+json` as wrong credentials: a distinct "invalid shape" reply on a credential field tells a caller which half of which account exists (user enumeration), and a null password must not become a 500. `fieldErrors` applies to every other DTO.
