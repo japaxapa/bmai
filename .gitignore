@@ -31,3 +31,12 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Teaching workspace (local learning artifacts, not project code) ###
+/MISSION.md
+/NOTES.md
+/RESOURCES.md
+/learning-records/
+/lessons/
+/reference/
+/assets/
