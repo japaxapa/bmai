@@ -1,0 +1,15 @@
+{
+  "name": "bmai",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace web",
+    "test": "npm run test --workspace web"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true,
+    "msw": false
+  }
+}
