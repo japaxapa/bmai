@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import LoginPage from "@/app/(auth)/login/page";
 import { AppProviders } from "@/providers";
+
+vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 describe("login page", () => {
   test("shows the sign-in heading and prompt inside the app providers", () => {
