@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiBaseUrl } from "@/lib/api/base-url";
 import { safeNext } from "@/lib/safe-next";
+import { useAuth } from "@/providers/auth-provider";
 
 // Shape courtesy only (frontend-architecture §Forms): zod gates the two
 // fields before they reach the API; react-hook-form owns registration,
@@ -19,6 +20,7 @@ type LoginValues = z.infer<typeof loginSchema>;
 export function LoginForm() {
   const router = useRouter();
   const next = useSearchParams().get("next");
+  const { refresh } = useAuth();
   const {
     register,
     handleSubmit,
@@ -45,6 +47,9 @@ export function LoginForm() {
     });
 
     if (response.ok) {
+      // The cookie is set but the shell's `/auth/me` read predates it —
+      // re-read before navigating so `/` renders the role, not the old state.
+      await refresh();
       router.push(safeNext(next));
       return;
     }
