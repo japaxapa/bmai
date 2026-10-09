@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { LoginForm } from "./_components/login-form";
+
 export default function LoginPage() {
   return (
     <main className="flex min-h-full flex-col items-center justify-center gap-6 p-6">
@@ -6,6 +9,9 @@ export default function LoginPage() {
         <p className="mt-2 text-sm text-neutral-500">
           Sign in with your email and password.
         </p>
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </div>
     </main>
   );
