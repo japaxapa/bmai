@@ -6,21 +6,12 @@ import { server } from "@/test/server";
 import { push } from "@/test/next-navigation";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { LoginForm } from "@/app/(auth)/login/_components/login-form";
+import { Toaster } from "@/components/ui/sonner";
+import { submitCredentials } from "@/test/helpers";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 const LOGIN_URL = `${DEFAULT_API_BASE_URL}/api/auth/login`;
-
-type User = ReturnType<typeof userEvent.setup>;
-
-async function submitCredentials(
-  user: User,
-  credentials = { email: "admin@bms.local", password: "admin123" },
-) {
-  await user.type(await screen.findByLabelText("Email"), credentials.email);
-  await user.type(screen.getByLabelText("Password"), credentials.password);
-  await user.click(screen.getByRole("button", { name: "Sign in" }));
-}
 
 describe("login form", () => {
   beforeEach(() => {
@@ -107,7 +98,7 @@ describe("login form", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  test("shows the API's detail and stays put when the login is refused", async () => {
+  test("toasts the API's detail and stays put when the login is refused", async () => {
     server.use(
       http.post(LOGIN_URL, () =>
         HttpResponse.json(
@@ -123,21 +114,26 @@ describe("login form", () => {
     );
     const user = userEvent.setup();
 
-    render(<LoginForm />);
+    // The Toaster is mounted in the root layout, so tests that expect one
+    // render it next to the form the same way.
+    render(
+      <>
+        <LoginForm />
+        <Toaster />
+      </>,
+    );
     await submitCredentials(user, {
       email: "admin@bms.local",
       password: "wrong-password",
     });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Invalid email or password",
-    );
+    // frontend-architecture §Forms: no fieldErrors on a 401 -> toast, not inline.
+    expect(await screen.findByText("Invalid email or password")).toBeTruthy();
     expect(push).not.toHaveBeenCalled();
   });
 
   test("posts to whatever base URL the environment configures", async () => {
     // The dev box's 8080 is taken, so the API can live anywhere (issue #4 context).
-    vi.stubEnv("API_BASE_URL", undefined);
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:9099");
     const postedToConfiguredBase: Request[] = [];
     const postedToDefaultBase: Request[] = [];

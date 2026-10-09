@@ -3,11 +3,12 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiBaseUrl } from "@/lib/api/base-url";
+import type { Role } from "@/lib/role-gates";
 
 /** The signed-in User (GLOSSARY) as returned by `GET /api/auth/me`. */
 export type AuthUser = {
   email: string;
-  role: "ADMIN" | "MANAGER" | "EMPLOYEE";
+  role: Role;
 };
 
 const AUTH_ME_KEY = ["auth", "me"] as const;

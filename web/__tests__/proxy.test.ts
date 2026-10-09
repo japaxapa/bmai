@@ -2,7 +2,6 @@
 // so it is tested outside jsdom: jose's key checks and fs reads need real
 // Node globals.
 // @vitest-environment node
-import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { SignJWT } from "jose";
 import { describe, expect, test, vi } from "vitest";
@@ -94,17 +93,3 @@ describe("proxy: role gates", () => {
   });
 });
 
-describe("proxy: shared secret parity (ADR 0015)", () => {
-  test("the committed dev default matches application.properties", () => {
-    const properties = readFileSync(
-      new URL("../../src/main/resources/application.properties", import.meta.url),
-      "utf8",
-    );
-    const committed = properties.match(
-      /^auth\.jwt\.secret=\$\{AUTH_JWT_SECRET:([^}]+)\}$/m,
-    )?.[1];
-
-    expect(committed, "default not found in application.properties").toBeDefined();
-    expect(DEV_JWT_SECRET).toBe(committed);
-  });
-});

@@ -4,15 +4,11 @@ export const DEFAULT_API_BASE_URL = "http://localhost:8080";
 /**
  * Where the API lives, per call — so a test or a run can point it elsewhere.
  *
- * - `API_BASE_URL` is server-side only: Next compiles references to it in
- *   client bundles down to an empty string, which is why this reads with `||`.
- * - `NEXT_PUBLIC_API_BASE_URL` is inlined into the browser bundle at build
- *   time, and is the one to set when this box's 8080 is already taken.
+ * Only `NEXT_PUBLIC_API_BASE_URL` is honoured: every caller of this helper is
+ * a client component, and Next inlines `NEXT_PUBLIC_*` into the browser bundle
+ * at build time. (A bare `API_BASE_URL` would compile down to an empty string
+ * client-side, so it is deliberately not read here.)
  */
 export function apiBaseUrl(): string {
-  return (
-    process.env.API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    DEFAULT_API_BASE_URL
-  );
+  return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL;
 }

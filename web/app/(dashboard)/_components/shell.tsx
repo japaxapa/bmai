@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useAuth, type AuthUser } from "@/providers/auth-provider";
+import { rolesFor } from "@/lib/role-gates";
 
 type NavItem = {
   href: string;
@@ -11,10 +12,14 @@ type NavItem = {
   roles?: readonly AuthUser["role"][];
 };
 
-/** UI hides by role — UX only; the backend enforces (frontend-architecture §State). */
+/**
+ * UI hides by role — UX only; the backend enforces (frontend-architecture
+ * §State). The role sets come from the shared matrix (lib/role-gates) the
+ * middleware enforces, so nav and gates can't drift apart.
+ */
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Dashboard" },
-  { href: "/users", label: "Users", roles: ["ADMIN"] },
+  { href: "/users", label: "Users", roles: rolesFor("/users") },
 ];
 
 function canSee(item: NavItem, role: AuthUser["role"] | null): boolean {

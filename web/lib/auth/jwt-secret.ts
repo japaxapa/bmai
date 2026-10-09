@@ -6,7 +6,8 @@
  * rejected by the other (a silent login loop). With no env set, the committed
  * dev default keeps a fresh clone working with zero configuration, mirroring
  * `auth.jwt.secret` in `src/main/resources/application.properties`; a parity
- * test in `__tests__/proxy.test.ts` fails if the two ever drift.
+ * test on the backend side (`SharedJwtSecretParityTest`, ./mvnw test) fails
+ * if the two ever drift.
  */
 export const DEV_JWT_SECRET =
   "3eced932e8977c5e1cbed61de5858d158506ca8e36f9483f5bf3c6ded4d0b92e";

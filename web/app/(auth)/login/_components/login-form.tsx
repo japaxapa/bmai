@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiBaseUrl } from "@/lib/api/base-url";
@@ -54,16 +55,16 @@ export function LoginForm() {
       return;
     }
 
-    // RFC 9457: the refusal carries its own sentence in `detail`, and a login
-    // has no field errors to attach it to — so it shows as one form-level
-    // message and the page stays exactly where it is (frontend-architecture §Forms).
+    // RFC 9457: the refusal carries its own sentence in `detail`. A login 401
+    // has no `fieldErrors`, so per frontend-architecture §Forms it lands as a
+    // toast — visible, dismissible, and out of the field layout — while the
+    // page stays exactly where it is.
     const problem = (await response.json().catch(() => ({}))) as {
       detail?: unknown;
     };
-    setError("root", {
-      message:
-        typeof problem.detail === "string" ? problem.detail : "Sign-in failed.",
-    });
+    toast.error(
+      typeof problem.detail === "string" ? problem.detail : "Sign-in failed.",
+    );
   });
 
   const fieldError = (message?: string) =>
@@ -75,7 +76,6 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} noValidate className="mt-6 flex flex-col gap-4">
-      {fieldError(errors.root?.message)}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-sm font-medium">
           Email

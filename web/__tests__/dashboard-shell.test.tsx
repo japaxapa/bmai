@@ -8,6 +8,7 @@ import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { AppProviders } from "@/providers";
 import { LoginForm } from "@/app/(auth)/login/_components/login-form";
 import DashboardLayout from "@/app/(dashboard)/layout";
+import { submitCredentials, SEEDED_ADMIN } from "@/test/helpers";
 
 vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
@@ -67,19 +68,28 @@ describe("dashboard shell", () => {
     expect(screen.queryByText("admin@bms.local")).toBeNull();
   });
 
-  test("an EMPLOYEE does not see the ADMIN-only Users nav item", async () => {
-    server.use(
-      http.get(ME_URL, () =>
-        HttpResponse.json({ email: "clerk@bms.local", role: "EMPLOYEE" }),
-      ),
-    );
+  // The middle role is the asymmetric one (#4: /finance is ADMIN|MANAGER,
+  // /users ADMIN) — it must not be lumped in with either neighbour.
+  test.each([
+    { role: "EMPLOYEE" as const, email: "clerk@bms.local" },
+    { role: "MANAGER" as const, email: "manager@bms.local" },
+  ])(
+    "a $role does not see the ADMIN-only Users nav item",
+    async ({ role, email }) => {
+      server.use(
+        http.get(ME_URL, () =>
+          HttpResponse.json({ email, role }),
+        ),
+      );
 
-    renderShell();
+      renderShell();
 
-    expect(await screen.findByText("clerk@bms.local")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
-  });
+      expect(await screen.findByText(email)).toBeInTheDocument();
+      expect(screen.getByText(role)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
+      expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
+    },
+  );
 
   test("a successful login makes the shell read the fresh /auth/me", async () => {
     let meCalls = 0;
@@ -98,9 +108,7 @@ describe("dashboard shell", () => {
     // The first /auth/me has settled: the shell really is signed-out.
     expect(await screen.findByText("Not signed in")).toBeInTheDocument();
 
-    await user.type(await screen.findByLabelText("Email"), "admin@bms.local");
-    await user.type(screen.getByLabelText("Password"), "admin123");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await submitCredentials(user, SEEDED_ADMIN);
 
     expect(await screen.findByText("admin@bms.local")).toBeInTheDocument();
     expect(push).toHaveBeenCalledWith("/");

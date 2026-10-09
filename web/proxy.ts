@@ -1,24 +1,10 @@
 import { jwtVerify } from "jose";
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtSecret } from "@/lib/auth/jwt-secret";
-import type { AuthUser } from "@/providers/auth-provider";
-
-/** GLOSSARY Role: a closed set, so the gates below are checked by tsc. */
-type Role = AuthUser["role"];
+import { ROLE_GATES, type Role } from "@/lib/role-gates";
 
 /** The login cookie the backend sets (ADR 0015 / AuthCookie). */
 const SESSION_COOKIE = "access_token";
-
-/**
- * Role gates (frontend-architecture §State): which roles may enter a path
- * prefix. Unlisted paths need only a valid session. UI hiding is UX only —
- * the backend re-checks every request.
- */
-const ROLE_GATES: { prefix: string; roles: readonly Role[] }[] = [
-  { prefix: "/finance", roles: ["ADMIN", "MANAGER"] },
-  { prefix: "/users", roles: ["ADMIN"] },
-  { prefix: "/categories", roles: ["ADMIN"] },
-];
 
 /**
  * The session's role, or null when there is none to trust: no cookie, a

@@ -70,6 +70,6 @@ hooks/ lib/ types/                                       # generic hooks, api cl
 
 ## 9. State, routes, forms (Q37–Q39)
 
-- Providers: auth (fed from `GET /auth/me` over the httpOnly cookie), query client, theme. Nothing else is global.
+- Providers: auth (fed from `GET /auth/me` over the httpOnly cookie — a browser-side read; ADR 0018 records why not the spec'd server-read), query client, theme. Nothing else is global.
 - Middleware (`jose` verify): unauthenticated → `/login?next=…`; role-mismatched groups redirect; UI hides by role (UX only).
 - Forms: react-hook-form + zod (shape courtesy only); 409/422 `fieldErrors` → inline; ConfirmDialog for destructive actions (reason required for adjustments); `loading.tsx`/`error.tsx`; no optimistic updates v1; 401 interceptor → login.
