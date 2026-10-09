@@ -40,4 +40,7 @@ build/
 /learning-records/
 /lessons/
 /reference/
-/assets/
+/assets/*
+# The web-shell screenshot is project material (README references it), unlike
+# the local lesson artifacts beside it — keep it committed.
+!/assets/web-shell.png

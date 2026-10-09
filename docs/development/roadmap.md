@@ -4,7 +4,7 @@ Strategy (b): all modules honest-shallow, depth on orders/inventory/finance. Fal
 
 ## Phase 0 — Walking slice
 
-Repo layout, compose (db), Flyway, Security+JWT, Next+shadcn+3 providers, middleware, login → `/`. **Done:** seeded admin logs in locally; `/auth/me` returns role.
+Repo layout, compose (db), Flyway, Security+JWT, Next+shadcn+3 providers, middleware, login → `/`. **Done:** seeded admin logs in through the UI (screenshot in `assets/`); `/auth/me` returns role; route protection verified — unauthenticated → `/login?next=…`, session survives refresh.
 
 ## Phase 1 — Catalog
 
