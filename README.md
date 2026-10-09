@@ -44,7 +44,18 @@ curl -i -X POST http://localhost:8080/api/auth/login \
   -d '{"email":"admin@bms.local","password":"wrong"}'      # 401 application/problem+json
 ```
 
-The frontend (`npm run dev --workspace web` → :3000) arrives with the UI phase; CORS already allows exactly that origin with credentials (ADR 0015). See `docs/development/roadmap.md` for the phased plan.
+### Run the frontend (web)
+
+```sh
+npm install                                   # once, at the repo root (npm workspaces)
+npm run dev --workspace web                   # Next.js on :3000 — log in with the seeded admin
+```
+
+Open http://localhost:3000 — an unauthenticated visit redirects to `/login?next=…`; logging in as the seeded admin lands on `/` with the role shown in the shell header, and the session (httpOnly cookie) survives a refresh:
+
+![Logged-in shell: sidebar + header showing admin@bms.local with the ADMIN badge](assets/web-shell.png)
+
+The UI talks straight to the API (no BFF), so it needs the API base URL when it isn't the documented `:8080` default: `API_BASE_URL` (server-side) or `NEXT_PUBLIC_API_BASE_URL` (browser bundle). E.g. with the backend on `:8081`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8081 npm run dev --workspace web`. CORS allows exactly `http://localhost:3000` with credentials (ADR 0015).
 
 ## Docs
 
