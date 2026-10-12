@@ -14,7 +14,7 @@ app/
     products/  suppliers/  orders/ (new, [id], [id]/edit)  inventory/  purchases/
     finance/ (invoices, payables, transactions)  reports/  users/  categories/
 features/<f>/components|hooks|api.ts
-components/ui/  components/shared/ # DataTable (shadcn + tanstack), PageHeader, EmptyState, ConfirmDialog
+components/ui/  components/shared/ # DataTable (shadcn + tanstack), PageHeader, EmptyState, ConfirmDialog, PagedList
 providers/  hooks/  lib/  types/
 ```
 
@@ -25,6 +25,7 @@ One-home rule: route-specific → colocate; feature-shared → `features/<f>/`; 
 - Dashboard: server component → `:8080` via `lib/api` (cookie forwarded). Skeletons via `loading.tsx`.
 - Tables: client islands seeded with server `initialData`; filters in URL search params (shareable, back-button-safe); React Query mutations → invalidation.
 - Direct `:8080` calls, `credentials: "include"`; no BFF proxy. `useEffect`-fetching banned.
+- Pagination (ADR 0019): `usePageParam` (`hooks/`) holds the 0-based page in `?page=` — the same number the API takes — and `<PagedList>` (`components/shared/`) renders the loading/empty/error states, the "x–y of total" summary and the prev/next bounds around a list's rows. Each list keeps its fetch: query key includes the page, prefix invalidation clears every cached page.
 
 ## State, auth UX, forms
 

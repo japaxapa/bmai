@@ -60,6 +60,50 @@ describe("categories page", () => {
     expect(screen.getByText("Deactivated")).toBeInTheDocument();
   });
 
+  // The whole point of ticket #42: past the API's first page nothing may
+  // silently vanish — the page travels to the API, and the pager reaches
+  // the rows beyond it.
+  test("reaches rows past the first page by paging, keeping the page in the URL", async () => {
+    signInAs("ADMIN", "admin@bms.local");
+    const requestedPages: string[] = [];
+    server.use(
+      http.get(CATEGORIES_URL, ({ request }) => {
+        const page = new URL(request.url).searchParams.get("page") ?? "0";
+        requestedPages.push(page);
+        return HttpResponse.json(
+          page === "0"
+            ? {
+                items: [{ id: 1, name: "Café", active: true }],
+                page: 0,
+                size: 2,
+                total: 3,
+                totalPages: 2,
+              }
+            : {
+                items: [{ id: 3, name: "Trigo", active: true }],
+                page: 1,
+                size: 2,
+                total: 3,
+                totalPages: 2,
+              },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText("Café");
+    expect(screen.getByText("1–1 of 3")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByText("Trigo")).toBeInTheDocument();
+    expect(screen.queryByText("Café")).toBeNull();
+    // The request carried the page, and the URL keeps it (shareable).
+    expect(requestedPages).toEqual(["0", "1"]);
+    expect(window.location.search).toBe("?page=1");
+  });
+
   test("creating a category posts it and shows it in the list", async () => {
     signInAs("ADMIN", "admin@bms.local");
     let created = false;

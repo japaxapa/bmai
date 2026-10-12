@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { PagedList, type PagedEnvelope } from "@/components/shared/paged-list";
+import { usePageParam } from "@/hooks/use-page-param";
 import { apiBaseUrl } from "@/lib/api/base-url";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -32,25 +34,27 @@ type CategoryValues = z.infer<typeof categorySchema>;
 /** One row of the vocabulary (GLOSSARY Category). */
 export type Category = { id: number; name: string; active: boolean };
 
-/** The paged envelope api-design promises for every collection. */
-export type CategoriesEnvelope = {
-  items: Category[];
-  page: number;
-  size: number;
-  total: number;
-  totalPages: number;
-};
-
 export const CATEGORIES_KEY = ["categories"] as const;
 
-export async function fetchCategories(): Promise<CategoriesEnvelope> {
-  const response = await fetch(`${apiBaseUrl()}/api/categories`, {
-    credentials: "include",
-  });
+/**
+ * One page of categories. The page goes on the wire (`?page=`, 0-based —
+ * the same number the URL carries, ADR 0019), so every row is reachable;
+ * the API's default first page can only ever hold 100 (api-design size
+ * ≤ 100).
+ */
+export async function fetchCategories(
+  page: number,
+): Promise<PagedEnvelope<Category>> {
+  const response = await fetch(
+    `${apiBaseUrl()}/api/categories?page=${page}`,
+    {
+      credentials: "include",
+    },
+  );
   if (!response.ok) {
     throw new Error(`GET /api/categories -> ${response.status}`);
   }
-  return (await response.json()) as CategoriesEnvelope;
+  return (await response.json()) as PagedEnvelope<Category>;
 }
 
 /**
@@ -75,9 +79,13 @@ export function CategoriesPanel() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
 
-  const { data } = useQuery({
-    queryKey: CATEGORIES_KEY,
-    queryFn: fetchCategories,
+  // The page lives in the URL (usePageParam), and the query key carries it:
+  // each page is its own cache entry, and the prefix invalidation below
+  // still clears all of them after a write.
+  const { page, goToPage } = usePageParam();
+  const { data, error } = useQuery({
+    queryKey: [...CATEGORIES_KEY, page],
+    queryFn: () => fetchCategories(page),
   });
 
   /**
@@ -233,48 +241,52 @@ export function CategoriesPanel() {
         </form>
       )}
 
-      <ul className="flex max-w-xl flex-col gap-2">
-        {data?.items.map((category) => (
-          <li key={category.id} className="flex items-center gap-3">
-            <span className="w-44 truncate text-sm">{category.name}</span>
-            {/* GLOSSARY "Deactivated": retired rows stay, marked — never gone. */}
-            <span className="w-24 text-sm text-neutral-500">
-              {category.active ? "Active" : "Deactivated"}
-            </span>
-            {isAdmin && (
-              <>
-                <button
-                  type="button"
-                  aria-label={`Edit ${category.name}`}
-                  onClick={() => {
-                    // Seed the open form from the row itself — no second
-                    // fetch to fill it in (testing-strategy §4).
-                    setEditing(category);
-                    setConflict(null);
-                    reset({ name: category.name });
-                  }}
-                  className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  aria-label={`${category.active ? "Deactivate" : "Reactivate"} ${category.name}`}
-                  onClick={() =>
-                    changeStatus.mutate({
-                      id: category.id,
-                      active: !category.active,
-                    })
-                  }
-                  className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                >
-                  {category.active ? "Deactivate" : "Reactivate"}
-                </button>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
+      {/* The pager owns everything around the rows — states, summary,
+          prev/next bounds (ADR 0019); the rows themselves stay here. */}
+      <PagedList envelope={data} error={error} onPageChange={goToPage}>
+        <ul className="flex max-w-xl flex-col gap-2">
+          {data?.items.map((category) => (
+            <li key={category.id} className="flex items-center gap-3">
+              <span className="w-44 truncate text-sm">{category.name}</span>
+              {/* GLOSSARY "Deactivated": retired rows stay, marked — never gone. */}
+              <span className="w-24 text-sm text-neutral-500">
+                {category.active ? "Active" : "Deactivated"}
+              </span>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${category.name}`}
+                    onClick={() => {
+                      // Seed the open form from the row itself — no second
+                      // fetch to fill it in (testing-strategy §4).
+                      setEditing(category);
+                      setConflict(null);
+                      reset({ name: category.name });
+                    }}
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${category.active ? "Deactivate" : "Reactivate"} ${category.name}`}
+                    onClick={() =>
+                      changeStatus.mutate({
+                        id: category.id,
+                        active: !category.active,
+                      })
+                    }
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                  >
+                    {category.active ? "Deactivate" : "Reactivate"}
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      </PagedList>
     </main>
   );
 }
