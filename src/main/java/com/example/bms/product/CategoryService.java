@@ -58,7 +58,7 @@ public class CategoryService {
     @Transactional
     public CategoryResponse create(String name) {
         var stored = store(new Category(0, name, true));
-        return new CategoryResponse(stored.id(), stored.name(), stored.active());
+        return responseOf(stored);
     }
 
     /**
@@ -71,7 +71,7 @@ public class CategoryService {
         var category = categories.findById(id)
                 .orElseThrow(() -> new CategoryNotFoundException(id));
         var stored = store(category.renamedTo(name));
-        return new CategoryResponse(stored.id(), stored.name(), stored.active());
+        return responseOf(stored);
     }
 
     /**
@@ -85,7 +85,12 @@ public class CategoryService {
         var category = categories.findById(id)
                 .orElseThrow(() -> new CategoryNotFoundException(id));
         var stored = store(category.withActive(active));
-        return new CategoryResponse(stored.id(), stored.name(), stored.active());
+        return responseOf(stored);
+    }
+
+    /** Entity → API response: the mapping lives in exactly one place. */
+    private static CategoryResponse responseOf(Category category) {
+        return new CategoryResponse(category.id(), category.name(), category.active());
     }
 
     /**

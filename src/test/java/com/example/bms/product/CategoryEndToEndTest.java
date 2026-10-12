@@ -4,6 +4,7 @@ import com.example.bms.auth.AuthCookie;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -92,56 +93,37 @@ class CategoryEndToEndTest {
 
     /**
      * AC: "Duplicate category name returns 409/422 problem+json rendered
-     * inline". 409, not 422: the row exists and conflicts (api-design errors
+     * inline" — 409, not 422: the row exists and conflicts (api-design errors
      * table), rather than the payload being semantically wrong.
      *
      * <p>The refusal must be an RFC 9457 body with its own sentence — the UI
      * renders {@code detail} inline — and it must come from the constraint, so
      * a second identical POST answers identically whether or not anyone
-     * checked first.
+     * checked first. Both spellings run through that same path: the exact
+     * repeat, and the same word in another case — typing "HORTIFRUTI" after
+     * "Hortifruti" repeats the vocabulary word, it does not invent a second
+     * one (the functional index on {@code lower(name)}, the choice settled
+     * over a plain {@code UNIQUE}).
      */
-    @Test
-    void duplicateNameIsRefusedWithProblemJsonByTheRealUniqueIndex() {
+    @ParameterizedTest
+    @CsvSource({
+        "Refrigerantes, Refrigerantes",
+        "Hortifruti, HORTIFRUTI",
+    })
+    void duplicateNameIsRefusedWithProblemJsonByTheRealUniqueIndex(String first, String second) {
         var cookie = adminCookie();
 
-        var first = post("/api/categories", Map.of("name", "Refrigerantes"), cookie);
-        assertThat(first.getStatusCode().value()).as("the first one is new").isEqualTo(201);
+        var created = post("/api/categories", Map.of("name", first), cookie);
+        assertThat(created.getStatusCode().value()).as("the first one is new").isEqualTo(201);
 
-        var second = post("/api/categories", Map.of("name", "Refrigerantes"), cookie);
+        var duplicate = post("/api/categories", Map.of("name", second), cookie);
 
-        assertThat(second.getStatusCode().value()).isEqualTo(409);
-        assertThat(second.getHeaders().getContentType().toString())
+        assertThat(duplicate.getStatusCode().value()).isEqualTo(409);
+        assertThat(duplicate.getHeaders().getContentType().toString())
                 .as("RFC 9457 body, same shape as every other refusal")
                 .contains("problem+json");
-        assertThat(field(second.getBody(), "$.status")).isEqualTo(409);
-        assertThat(field(second.getBody(), "$.detail"))
-                .as("the UI toasts/prints this sentence, so it cannot be blank")
-                .isNotNull();
-    }
-
-    /**
-     * Uniqueness is case-insensitive — the choice made with the user over a
-     * plain {@code UNIQUE}: a human typing "bebidas" after "Bebidas" is
-     * repeating the same vocabulary word, not inventing a second one. The
-     * refusal must therefore come from the same place the exact-case one
-     * does (the functional index on {@code lower(name)}), so a service that
-     * forgets its own check cannot let either spelling through.
-     */
-    @Test
-    void duplicateNameIsRefusedRegardlessOfCase() {
-        var cookie = adminCookie();
-
-        var first = post("/api/categories", Map.of("name", "Hortifruti"), cookie);
-        assertThat(first.getStatusCode().value()).as("the first one is new").isEqualTo(201);
-
-        var second = post("/api/categories", Map.of("name", "HORTIFRUTI"), cookie);
-
-        assertThat(second.getStatusCode().value()).isEqualTo(409);
-        assertThat(second.getHeaders().getContentType().toString())
-                .as("RFC 9457 body, same shape as every other refusal")
-                .contains("problem+json");
-        assertThat(field(second.getBody(), "$.status")).isEqualTo(409);
-        assertThat(field(second.getBody(), "$.detail"))
+        assertThat(field(duplicate.getBody(), "$.status")).isEqualTo(409);
+        assertThat(field(duplicate.getBody(), "$.detail"))
                 .as("the UI toasts/prints this sentence, so it cannot be blank")
                 .isNotNull();
     }

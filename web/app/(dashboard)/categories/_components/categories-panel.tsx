@@ -101,6 +101,17 @@ export function CategoriesPanel() {
     toast.error("The request was refused");
   };
 
+  /**
+   * A row action (status flip) has no form to print into, so its refusal
+   * takes the toast channel — frontend-architecture §Forms' fallback for
+   * anything without a field. Writing it into `conflict` instead would show
+   * an unrelated row's failure under the create/rename name field, where it
+   * reads as a name conflict.
+   */
+  const rowActionRefused = (problem?: Problem) => {
+    toast.error(problem?.detail ?? "The request was refused");
+  };
+
   const create = useMutation({
     mutationFn: async (name: string) => {
       const response = await fetch(`${apiBaseUrl()}/api/categories`, {
@@ -144,7 +155,7 @@ export function CategoriesPanel() {
       setConflict(null);
       await queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
-    onError: handleRefusal,
+    onError: rowActionRefused,
   });
 
   const rename = useMutation({

@@ -6,6 +6,7 @@ import { server } from "@/test/server";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { AppProviders } from "@/providers";
 import CategoriesPage from "@/app/(dashboard)/categories/page";
+import { Toaster } from "@/components/ui/sonner";
 
 // jsdom never mounts the app router, so anything calling useRouter() /
 // useSearchParams() would blow up without this double.
@@ -239,6 +240,52 @@ describe("categories page", () => {
     expect(requests[0].method).toBe("PUT");
     expect(requests[0].credentials).toBe("include");
     expect(await requests[0].json()).toEqual({ active: false });
+  });
+
+  // A row action has no form to print into: its refusal goes to the toast.
+  // The Toaster is mounted here (unlike the default renderPage above) because
+  // the assertion is exactly that the toast — not the create/rename form —
+  // carries the sentence.
+  test("a refused status change surfaces as a toast, never inside the form", async () => {
+    signInAs("ADMIN", "admin@bms.local");
+    server.use(
+      http.get(CATEGORIES_URL, () =>
+        HttpResponse.json(envelope({ id: 7, name: "Sucos", active: true })),
+      ),
+      http.put(`${CATEGORIES_URL}/7/status`, () =>
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            status: 404,
+            detail: "Category 7 was not found.",
+          },
+          {
+            status: 404,
+            headers: { "Content-Type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <AppProviders>
+        <Toaster />
+        <CategoriesPage />
+      </AppProviders>,
+    );
+    await screen.findByText("Sucos");
+
+    await user.click(
+      screen.getByRole("button", { name: "Deactivate Sucos" }),
+    );
+
+    // The sentence reached the user...
+    expect(await screen.findByText("Category 7 was not found.")).toBeInTheDocument();
+    // ...and the create/rename form's alert stayed empty: a status failure
+    // must not masquerade as a name conflict.
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   test("renames a category through the same form, seeded from the row", async () => {

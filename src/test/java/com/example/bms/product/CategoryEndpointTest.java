@@ -181,6 +181,25 @@ class CategoryEndpointTest {
     }
 
     /**
+     * business-rules §5: the name is 1–120 chars — the blank half is covered
+     * above, this is the cap. Asserting the exact {@code @Size} message proves
+     * the refusal came from the length rule itself: it is the only current
+     * enforcement (the DB CHECK lands with the next schema migration, #41),
+     * and testing-strategy wants every domain rule to have its own test.
+     */
+    @Test
+    void overlongNameIsRefusedWithTheCapMessage() throws Exception {
+        mvc.perform(post("/api/categories").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + "x".repeat(121) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.fieldErrors.name[0]")
+                        .value("Name must be at most 120 characters."));
+    }
+
+    /**
      * business-rules §4, row "Categories": ADMIN only — the first production
      * {@code @PreAuthorize} in the system, and the reason ticket #4 switched
      * {@code @EnableMethodSecurity} on. Both non-admin roles are named

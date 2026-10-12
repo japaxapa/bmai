@@ -29,15 +29,12 @@ public class CategoryController {
         this.categories = categories;
     }
 
-    /** The write DTOs the form posts; validation lives on the DTO shape. */
-    public record CreateCategoryRequest(
-            @NotBlank(message = "Name is required.")
-            @Size(max = 120, message = "Name must be at most 120 characters.")
-            String name) {
-    }
-
-    /** The same field rules as create: one form posts both shapes. */
-    public record UpdateCategoryRequest(
+    /**
+     * The write DTO both verbs accept — create and rename post the very same
+     * shape, so one record holds the field rules (one place to change them,
+     * and create cannot drift from rename).
+     */
+    public record CategoryRequest(
             @NotBlank(message = "Name is required.")
             @Size(max = 120, message = "Name must be at most 120 characters.")
             String name) {
@@ -57,7 +54,7 @@ public class CategoryController {
 
     /** 201, not 200: a caller must be able to tell a created row from an edited one. */
     @PostMapping
-    public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CreateCategoryRequest request) {
+    public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         var created = categories.create(request.name());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -65,7 +62,7 @@ public class CategoryController {
     /** 200 with the updated row: the UI re-renders what the API answers. */
     @PutMapping("/{id}")
     public CategoryResponse edit(@PathVariable long id,
-                                 @Valid @RequestBody UpdateCategoryRequest request) {
+                                 @Valid @RequestBody CategoryRequest request) {
         return categories.edit(id, request.name());
     }
 

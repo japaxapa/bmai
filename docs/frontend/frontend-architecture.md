@@ -29,6 +29,6 @@ One-home rule: route-specific → colocate; feature-shared → `features/<f>/`; 
 ## State, auth UX, forms
 
 - Providers: auth (browser reads the httpOnly cookie via `GET /auth/me` → `{email, role}` into client provider; ADR 0018 records why not the spec'd server-read), query client, theme. Nothing else global.
-- Middleware (`jose`): unauthenticated → `/login?next=…`; `/finance/**` → ADMIN|MANAGER; `/users`, `/categories` → ADMIN. UI hides by role (UX only); backend enforces.
+- Middleware (`jose`): unauthenticated → `/login?next=…`; `/finance/**` → ADMIN|MANAGER; `/users` → ADMIN. `/categories` is unlisted — any signed-in role enters (the list is vocabulary every role reads, business-rules §4); its write controls are ADMIN-only in the UI. UI hides by role (UX only); backend enforces.
 - Login: form → `POST :8080/api/auth/login` → cookie set by API → redirect `next`. Logout clears.
 - Forms: react-hook-form + zod (shape courtesy only). 409/422 `fieldErrors` → inline; else toast. Destructive actions → shared `ConfirmDialog` (reason required for adjustments). No optimistic updates v1. 401 interceptor → login with `next`.

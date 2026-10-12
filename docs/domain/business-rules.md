@@ -42,7 +42,7 @@ CANCELLED CANCELLED                   RETURNED
 | Create/edit customer | ✓ | ✓ | ✓ |
 | Deactivate customer | ✓ | ✓ | — |
 | Create/edit/deactivate product | ✓ | ✓ | — |
-| Categories | ✓ | — | — |
+| Manage categories (create/edit/status) | ✓ | — | — |
 | Create/edit supplier | ✓ | ✓ | — |
 | Order flow through COMPLETED, cancel CONFIRMED | ✓ | ✓ | ✓ |
 | Return (moves money) | ✓ | ✓ | — |
@@ -54,7 +54,7 @@ CANCELLED CANCELLED                   RETURNED
 | Users | ✓ | — | — |
 | Dashboard / reports / CSV | ✓ | ✓ | ✓ |
 
-Enforced by `@PreAuthorize` on write services; URL layer is authenticated-only. The Categories row governs *managing* the vocabulary; listing it (the read side) is open to every signed-in role, since MANAGER and EMPLOYEE need it on the product forms of tickets #6/#7. Two arguable cells kept open: receiving POs and cancel-CONFIRMED for EMPLOYEE if the clerk doubles as warehouse.
+Enforced by `@PreAuthorize` on write services; URL layer is authenticated-only. The Manage-categories row governs *managing* the vocabulary; listing it (the read side) is open to every signed-in role, since MANAGER and EMPLOYEE need it on the product forms of tickets #6/#7. Two arguable cells kept open: receiving POs and cancel-CONFIRMED for EMPLOYEE if the clerk doubles as warehouse.
 
 ## 5. Deactivation and drafts (Q28)
 
