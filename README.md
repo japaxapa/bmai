@@ -55,6 +55,10 @@ Open http://localhost:3000 — an unauthenticated visit redirects to `/login?nex
 
 ![Logged-in shell: sidebar + header showing admin@bms.local with the ADMIN badge](assets/web-shell.png)
 
+The seeded admin also manages the product vocabulary on `/categories` — create, rename, switch off. A name is unique ignoring case, and a switched-off category stays in the list, marked:
+
+![Categories: create form, three rows, one marked Deactivated, with Edit/Deactivate/Reactivate controls](assets/categories.png)
+
 The UI talks straight to the API (no BFF), so it needs the API base URL when it isn't the documented `:8080` default: `NEXT_PUBLIC_API_BASE_URL` (inlined into the browser bundle at build time — the only callers are client components). E.g. with the backend on `:8081`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8081 npm run dev --workspace web`. CORS allows exactly `http://localhost:3000` with credentials (ADR 0015).
 
 ## Docs

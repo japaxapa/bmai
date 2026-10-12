@@ -16,10 +16,14 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
@@ -90,8 +94,7 @@ public class SecurityConfig {
                         // Without this the resource server answers its own bare 401;
                         // bad tokens must carry the same problem+json envelope.
                         .authenticationEntryPoint(entryPoint)
-                        .jwt(jwt -> {
-                        }))
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(roleClaimToAuthority())))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint));
         return http.build();
     }
@@ -141,6 +144,27 @@ public class SecurityConfig {
     JwtEncoder jwtEncoder(@Value("${auth.jwt.secret}") String secret) {
         // ADR 0015: HS256 over a shared secret.
         return new NimbusJwtEncoder(new ImmutableSecret<>(hmacKey(secret)));
+    }
+
+    /**
+     * The {@code role} claim (architecture §4) becomes a {@code ROLE_}
+     * authority here — the one place JWT claims turn into what
+     * {@code @PreAuthorize} reads. Ticket #5 is the first production
+     * {@code @PreAuthorize} in the system, so before this mapping existed
+     * the claim was visible to {@code /auth/me} (which reads it directly)
+     * but invisible to method security: every real token was refused as
+     * non-admin.
+     */
+    @Bean
+    JwtAuthenticationConverter roleClaimToAuthority() {
+        var converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter((Jwt jwt) -> {
+            var role = jwt.getClaimAsString("role");
+            return role == null
+                    ? List.<GrantedAuthority>of()
+                    : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        });
+        return converter;
     }
 
     @Bean

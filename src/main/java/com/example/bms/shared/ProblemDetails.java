@@ -19,9 +19,18 @@ public final class ProblemDetails {
     }
 
     public static ProblemDetail unauthorized(String detail, String requestUri) {
-        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, detail);
+        return of(HttpStatus.UNAUTHORIZED, detail, requestUri);
+    }
+
+    /**
+     * One construction for every status, so the shape (type/title/status/
+     * detail/instance) cannot drift between the security side and the
+     * advice side of the boundary.
+     */
+    public static ProblemDetail of(HttpStatus status, String detail, String requestUri) {
+        var problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setType(URI.create("about:blank"));
-        problem.setTitle(HttpStatus.UNAUTHORIZED.getReasonPhrase());
+        problem.setTitle(status.getReasonPhrase());
         problem.setInstance(URI.create(requestUri));
         return problem;
     }

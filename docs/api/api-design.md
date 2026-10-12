@@ -6,7 +6,7 @@ REST, no `/v1` prefix (deliberate — single-client portfolio API; version when 
 
 - Paged envelope `{items, page, size, total, totalPages}` — never leak Spring's `Page`. `size ≤ 100`. Sort whitelist per resource.
 - Filters over nested collections: `GET /orders?customerId=`, `GET /orders?status=`. No `/customers/{id}/orders` duplication.
-- Deactivation = `PUT /{resource}/{id}/status` with `{active}` everywhere (customers, products, suppliers, users).
+- Deactivation = `PUT /{resource}/{id}/status` with `{active}` everywhere (categories, customers, products, suppliers, users).
 - Manual DTO mapping (no MapStruct at this scale). DTOs validated with `@Valid`; domain refusals surface as 409/422 (see Errors).
 - Numbers `ORD|PO|INV-YYYY-NNNN` generated server-side.
 
@@ -18,7 +18,7 @@ ops:        GET /actuator/health — 200 {"status":"UP"} plus per-component deta
 auth:       POST /api/auth/login  POST /api/auth/logout  GET /api/auth/me
             PUT /api/auth/password (needs current password)
 users:      CRUD (ADMIN) + PUT /users/{id}/status
-categories: CRUD (ADMIN)
+categories: CRUD (ADMIN) + PUT /categories/{id}/status — list open to any signed-in role; name 1–120 chars, unique ignoring case
 customers / products / suppliers: CRUD + status + search/filter/pagination
 orders:
   GET /api/orders  GET /api/orders/{id}  POST /api/orders
@@ -52,10 +52,10 @@ One `@RestControllerAdvice` mapping the `BusinessException` hierarchy to `Proble
 
 | Status | Meaning | Example |
 |---|---|---|
-| 400 + `fieldErrors` | DTO shape invalid | price = "abc" |
+| 400 + `fieldErrors` | DTO shape invalid | price = "abc"; blank category name |
 | 401 / 403 | no/bad token / wrong role | employee posts an adjustment |
 | 404 | unknown id | `/orders/999` |
-| 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU |
+| 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name |
 | 422 | business rule refuses | cost < 0 |
 | 500 | unexpected, no stack leak | bug |
 

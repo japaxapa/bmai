@@ -54,6 +54,10 @@ describe("proxy: unauthenticated requests", () => {
     );
   });
 
+  test("/categories still requires a session", async () => {
+    expect(expectLoginRedirect(await proxy(requestTo("/categories")))).toBe("/categories");
+  });
+
   test("/login itself stays reachable without a cookie", async () => {
     expect(await proxy(requestTo("/login"))).toBeUndefined();
   });
@@ -83,6 +87,16 @@ describe("proxy: role gates", () => {
     expect(employee.pathname).toBe("/");
     expect(admin).toBeUndefined();
   });
+
+  // business-rules §4: the category list is the vocabulary every signed-in
+  // role needs (MANAGER/EMPLOYEE use it on the product forms of #6/#7), so
+  // /categories is unlisted in ROLE_GATES — login only, no role gate.
+  test.each(["EMPLOYEE", "MANAGER", "ADMIN"])(
+    "a signed-in %s passes through /categories",
+    async (role) => {
+      expect(await proxy(requestTo("/categories", await signedCookie(role)))).toBeUndefined();
+    },
+  );
 
   test("EMPLOYEE is kept out of /users", async () => {
     const location = redirectTo(

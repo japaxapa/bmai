@@ -35,7 +35,7 @@ The unique stock-keeping identifier of a product.
 _Avoid_: Code, barcode
 
 **Category**:
-An ADMIN-managed grouping of products. Business data, not code. Name is unique.
+An ADMIN-managed grouping of products. Business data, not code. Name is unique — any casing counts as the same name.
 _Avoid_: Type, tag
 
 **Price**:

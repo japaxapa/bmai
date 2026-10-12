@@ -1,5 +1,6 @@
 package com.example.bms;
 
+import com.example.bms.auth.AuthController;
 import com.example.bms.auth.AuthService;
 import com.example.bms.auth.Role;
 import com.example.bms.auth.User;
@@ -41,9 +42,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * exercised end to end by the full-stack Seam B test.
  *
  * {@code @WebMvcTest} scans controllers only, so the beans the login path
- * needs are imported explicitly.
+ * needs are imported explicitly. Scanned controllers are named below: without
+ * that, every controller later tickets add (categories, products, …) would
+ * have to be wired into this auth slice too.
  */
-@WebMvcTest
+@WebMvcTest(controllers = AuthController.class)
 @Import({SecurityConfig.class, AuthService.class})
 class AuthEndpointTest {
 

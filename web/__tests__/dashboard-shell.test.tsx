@@ -74,7 +74,7 @@ describe("dashboard shell", () => {
     { role: "EMPLOYEE" as const, email: "clerk@bms.local" },
     { role: "MANAGER" as const, email: "manager@bms.local" },
   ])(
-    "a $role does not see the ADMIN-only Users nav item",
+    "a $role does not see the ADMIN-only Users nav item, but does see Categories",
     async ({ role, email }) => {
       server.use(
         http.get(ME_URL, () =>
@@ -87,6 +87,8 @@ describe("dashboard shell", () => {
       expect(await screen.findByText(email)).toBeInTheDocument();
       expect(screen.getByText(role)).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
+      // business-rules §4: the category list reads for every signed-in role.
+      expect(screen.getByRole("link", { name: "Categories" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
     },
   );

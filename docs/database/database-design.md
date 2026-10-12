@@ -12,7 +12,7 @@ PostgreSQL + Flyway SQL migrations. Conventions: **bigint identity PKs**, `numer
 
 - `users` — email **unique** (login identity), password_hash, role enum, active flag.
 - `customers`, `suppliers` — profile + `document` **unique** each, email not unique, active flag, `payment_terms_days DEFAULT 30`.
-- `categories` — name **unique**.
+- `categories` — name **unique** case-insensitively (functional unique index on `lower(name)`), active flag.
 - `products` — sku **unique**, name, description, price (>0), cost (weighted avg ≥0), stock (≥0), minimum_stock (≥0), category FK, supplier FK, active flag.
 - `orders` — customer FK, status enum (DRAFT, CONFIRMED, PROCESSING, COMPLETED, CANCELLED, RETURNED), total, number `ORD-YYYY-NNNN` unique, timestamps.
 - `order_items` — order FK, product FK, qty (>0), `unit_price` (locked at CONFIRM), `unit_cost` (written at PROCESSING, nullable until then), subtotal.
