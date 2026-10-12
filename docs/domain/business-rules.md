@@ -54,10 +54,10 @@ CANCELLED CANCELLED                   RETURNED
 | Users | ✓ | — | — |
 | Dashboard / reports / CSV | ✓ | ✓ | ✓ |
 
-Enforced by `@PreAuthorize` on write services; URL layer is authenticated-only. Two arguable cells kept open: receiving POs and cancel-CONFIRMED for EMPLOYEE if the clerk doubles as warehouse.
+Enforced by `@PreAuthorize` on write services; URL layer is authenticated-only. The Categories row governs *managing* the vocabulary; listing it (the read side) is open to every signed-in role, since MANAGER and EMPLOYEE need it on the product forms of tickets #6/#7. Two arguable cells kept open: receiving POs and cancel-CONFIRMED for EMPLOYEE if the clerk doubles as warehouse.
 
 ## 5. Deactivation and drafts (Q28)
 
 - Deactivated product/customer/supplier: blocked in all *new* documents; blocks **confirm** if sitting in a DRAFT; in-flight flows complete; history never rewired.
 - Deactivated **user**: the password stops authenticating — login answers the same indistinguishable `401` as any bad login (never "account disabled"). A JWT issued *before* deactivation keeps working until it expires: with no token store (ADR 0015), deactivation revokes the next login, not the current session. Users are deactivated, never deleted.
-- `document` unique per party table (DB); `email` not unique. SKU unique. Category name unique.
+- `document` unique per party table (DB); `email` not unique. SKU unique. Category name unique, **case-insensitive** (unique index on `lower(name)`), 1–120 chars.
