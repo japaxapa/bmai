@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, test, vi } from "vitest";
 import { server } from "@/test/server";
+import { makeEnvelope } from "@/test/envelope";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { AppProviders } from "@/providers";
 import CategoriesPage from "@/app/(dashboard)/categories/page";
@@ -17,11 +18,6 @@ const ME_URL = `${DEFAULT_API_BASE_URL}/api/auth/me`;
 
 type Role = "ADMIN" | "MANAGER" | "EMPLOYEE";
 type Category = { id: number; name: string; active: boolean };
-
-/** The paged envelope api-design.md promises for every collection. */
-function envelope(...items: Category[]) {
-  return { items, page: 0, size: 100, total: items.length, totalPages: 1 };
-}
 
 function signInAs(role: Role, email: string) {
   server.use(http.get(ME_URL, () => HttpResponse.json({ email, role })));
@@ -44,10 +40,10 @@ describe("categories page", () => {
     server.use(
       http.get(CATEGORIES_URL, () =>
         HttpResponse.json(
-          envelope(
+          makeEnvelope([
             { id: 1, name: "Bebidas", active: true },
             { id: 2, name: "Limpeza", active: false },
-          ),
+          ]),
         ),
       ),
     );
@@ -112,11 +108,11 @@ describe("categories page", () => {
       http.get(CATEGORIES_URL, () =>
         HttpResponse.json(
           created
-            ? envelope(
+            ? makeEnvelope([
                 { id: 1, name: "Grãos", active: true },
                 { id: 2, name: "Higiene", active: true },
-              )
-            : envelope({ id: 1, name: "Grãos", active: true }),
+              ])
+            : makeEnvelope([{ id: 1, name: "Grãos", active: true }]),
         ),
       ),
       http.post(CATEGORIES_URL, async ({ request }) => {
@@ -152,7 +148,7 @@ describe("categories page", () => {
     signInAs("ADMIN", "admin@bms.local");
     server.use(
       http.get(CATEGORIES_URL, () =>
-        HttpResponse.json(envelope({ id: 1, name: "Padaria", active: true })),
+        HttpResponse.json(makeEnvelope([{ id: 1, name: "Padaria", active: true }])),
       ),
       http.post(CATEGORIES_URL, () =>
         HttpResponse.json(
@@ -190,7 +186,7 @@ describe("categories page", () => {
     signInAs("ADMIN", "admin@bms.local");
     server.use(
       http.get(CATEGORIES_URL, () =>
-        HttpResponse.json(envelope({ id: 1, name: "Frios", active: true })),
+        HttpResponse.json(makeEnvelope([{ id: 1, name: "Frios", active: true }])),
       ),
       http.post(CATEGORIES_URL, () =>
         HttpResponse.json(
@@ -233,7 +229,7 @@ describe("categories page", () => {
     signInAs("EMPLOYEE", "clerk@bms.local");
     server.use(
       http.get(CATEGORIES_URL, () =>
-        HttpResponse.json(envelope({ id: 1, name: "Bebidas", active: true })),
+        HttpResponse.json(makeEnvelope([{ id: 1, name: "Bebidas", active: true }])),
       ),
     );
 
@@ -255,7 +251,7 @@ describe("categories page", () => {
     server.use(
       http.get(CATEGORIES_URL, () =>
         HttpResponse.json(
-          envelope({ id: 1, name: "Descartáveis", active }),
+          makeEnvelope([{ id: 1, name: "Descartáveis", active }]),
         ),
       ),
       http.put(`${CATEGORIES_URL}/1/status`, async ({ request }) => {
@@ -294,7 +290,7 @@ describe("categories page", () => {
     signInAs("ADMIN", "admin@bms.local");
     server.use(
       http.get(CATEGORIES_URL, () =>
-        HttpResponse.json(envelope({ id: 7, name: "Sucos", active: true })),
+        HttpResponse.json(makeEnvelope([{ id: 7, name: "Sucos", active: true }])),
       ),
       http.put(`${CATEGORIES_URL}/7/status`, () =>
         HttpResponse.json(
@@ -339,7 +335,7 @@ describe("categories page", () => {
     server.use(
       http.get(CATEGORIES_URL, () =>
         HttpResponse.json(
-          envelope({ id: 1, name: current, active: true }),
+          makeEnvelope([{ id: 1, name: current, active: true }]),
         ),
       ),
       http.put(`${CATEGORIES_URL}/1`, async ({ request }) => {
@@ -368,5 +364,39 @@ describe("categories page", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].method).toBe("PUT");
     expect(await requests[0].json()).toEqual({ name: "Perfumes e cuidados" });
+  });
+
+  // A shared/bookmarked URL can outlive the list it points at: the backend
+  // answers the truth for a past-the-end page rather than clamping. The
+  // panel must offer the way back instead of a dead empty screen (the #42
+  // review's finding).
+  test("recovers a URL past the last page with a one-click way back", async () => {
+    signInAs("ADMIN", "admin@bms.local");
+    window.history.replaceState({}, "", "/categories?page=5");
+    server.use(
+      http.get(CATEGORIES_URL, ({ request }) => {
+        const page = new URL(request.url).searchParams.get("page");
+        return HttpResponse.json(
+          page === "5"
+            ? makeEnvelope<Category>([], { page: 5, total: 47, totalPages: 3 })
+            : makeEnvelope<Category>(
+                [{ id: 46, name: "Zíngibers", active: true }],
+                { page: 2, size: 20, total: 47, totalPages: 3 },
+              ),
+        );
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+
+    // 1-based position of the page the URL asked for — the URL stays 0-based.
+    expect(await screen.findByText("Page 6 of 3")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Go to last page" }));
+
+    expect(await screen.findByText("Zíngibers")).toBeInTheDocument();
+    expect(window.location.search).toBe("?page=2");
   });
 });

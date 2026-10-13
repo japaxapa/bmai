@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { PagedList, type PagedEnvelope } from "@/components/shared/paged-list";
 import { usePageParam } from "@/hooks/use-page-param";
 import { replace } from "@/test/next-navigation";
+import { makeEnvelope } from "@/test/envelope";
 
 // jsdom never mounts the app router, so anything calling useRouter() /
 // useSearchParams() would blow up without this double.
@@ -17,13 +18,10 @@ function envelopeOf(
   total = 6,
   size = 2,
 ): PagedEnvelope<Row> {
-  return {
-    items: names.map((name, index) => ({ id: page * size + index + 1, name })),
-    page,
-    size,
-    total,
-    totalPages: Math.ceil(total / size),
-  };
+  return makeEnvelope(
+    names.map((name, index) => ({ id: page * size + index + 1, name })),
+    { page, size, total, totalPages: Math.ceil(total / size) },
+  );
 }
 
 /**
@@ -111,6 +109,51 @@ describe("paged list", () => {
 
     expect(await screen.findByText("Nothing here yet.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go to last page" })).toBeNull();
+  });
+
+  // A URL can outlive the list it points at — a stale bookmark, a hand
+  // edit. The backend answers the truth for a past-the-end page (no
+  // clamping), so the component must too: no rows, but a one-click way
+  // back instead of a dead end (the #42 review's finding).
+  test("a URL past the last page gets a one-click way back", async () => {
+    window.history.replaceState({}, "", "/categories?page=5");
+    render(
+      <RowList
+        pages={{
+          5: makeEnvelope<Row>([], { page: 5, total: 47, totalPages: 3 }),
+          2: envelopeOf(2, ["Uvas"]),
+        }}
+      />,
+    );
+
+    // The rescue state: 1-based position, no empty-list lie, no dead
+    // prev/next, no x–y summary (there is no x–y to show).
+    expect(await screen.findByText("Page 6 of 3")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Previous" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Go to last page" }));
+
+    // One click lands on the last real page, rows and all.
+    expect(await screen.findByText("Uvas")).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith("/categories?page=2", {
+      scroll: false,
+    });
+  });
+
+  test("the rescue state only appears when the list actually has rows", async () => {
+    // total === 0 behind a past-the-end ?page= is still a genuinely empty
+    // list: the honest message, never the rescue controls.
+    window.history.replaceState({}, "", "/categories?page=5");
+    render(
+      <RowList pages={{ 5: makeEnvelope<Row>([], { total: 0, totalPages: 0 }) }} />,
+    );
+
+    expect(await screen.findByText("Nothing here yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Go to last page" })).toBeNull();
   });
 
   test("surfaces a failed fetch as text, not as a broken table", () => {
