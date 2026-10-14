@@ -66,7 +66,7 @@ hooks/ lib/ types/                                       # generic hooks, api cl
 
 ## 8. Data fetching — hybrid, one owner per datum (Q36)
 
-- Dashboard = server component fetching `:8080` directly. Tables = client islands seeded with `initialData` (no double fetch). Filters in URL search params. Mutations → React Query invalidation. Direct `:8080` calls (no BFF proxy). `useEffect`-fetching banned.
+- Dashboard = server component fetching `:8080` directly. Tables = client islands seeded with server-dehydrated state (ADR 0020; no double fetch). Filters in URL search params. Mutations → React Query invalidation. Direct `:8080` calls (no BFF proxy). `useEffect`-fetching banned.
 
 ## 9. State, routes, forms (Q37–Q39)
 

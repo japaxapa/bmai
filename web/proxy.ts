@@ -1,10 +1,8 @@
 import { jwtVerify } from "jose";
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtSecret } from "@/lib/auth/jwt-secret";
+import { SESSION_COOKIE } from "@/lib/auth/session-cookie";
 import { ROLE_GATES, type Role } from "@/lib/role-gates";
-
-/** The login cookie the backend sets (ADR 0015 / AuthCookie). */
-const SESSION_COOKIE = "access_token";
 
 /**
  * The session's role, or null when there is none to trust: no cookie, a

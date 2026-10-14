@@ -23,7 +23,7 @@ One-home rule: route-specific → colocate; feature-shared → `features/<f>/`; 
 ## Data fetching
 
 - Dashboard: server component → `:8080` via `lib/api` (cookie forwarded). Skeletons via `loading.tsx`.
-- Tables: client islands seeded with server `initialData`; filters in URL search params (shareable; page/filter changes use `replace`, so back leaves the list rather than walking pages — ADR 0019); React Query mutations → invalidation.
+- Tables: client islands seeded with the server's dehydrated state (`TableSeed` → `HydrationBoundary`, ADR 0020; per-list factory in `features/<f>/api.ts`; `<TableSkeleton>` as the Suspense fallback while the seed streams); filters in URL search params (shareable; page/filter changes use `replace`, so back leaves the list rather than walking pages — ADR 0019); React Query mutations → invalidation.
 - Direct `:8080` calls, `credentials: "include"`; no BFF proxy. `useEffect`-fetching banned.
 - Pagination (ADR 0019): `usePageParam` (`hooks/`) holds the 0-based page in `?page=` — the same number the API takes — and `<PagedList>` (`components/shared/`) renders the loading/empty/error states, the "x–y of total" summary and the prev/next bounds around a list's rows — plus, for a URL past the last page, a 1-based "Page N of M" with a one-click "Go to last page" way back. Each list keeps its fetch: query key includes the page, prefix invalidation clears every cached page.
 

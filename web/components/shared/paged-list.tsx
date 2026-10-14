@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TableSkeleton } from "@/components/shared/table-skeleton";
 import type { PagedEnvelope } from "@/types/paged-envelope";
 
 // The contract travels with the component for import ergonomics; its home is
@@ -70,7 +71,10 @@ export function PagedList({
     );
   }
   if (!envelope) {
-    return <p className="text-sm text-neutral-500">Loading…</p>;
+    // The same skeleton the server seed shows as its Suspense fallback
+    // (ADR 0020): one visual whether the rows are still seeding or the
+    // island fetched them itself.
+    return <TableSkeleton />;
   }
   if (envelope.total === 0) {
     return <p className="text-sm text-neutral-500">Nothing here yet.</p>;

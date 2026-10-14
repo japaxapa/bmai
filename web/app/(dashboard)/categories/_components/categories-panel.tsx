@@ -5,7 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { PagedList, type PagedEnvelope } from "@/components/shared/paged-list";
+import { PagedList } from "@/components/shared/paged-list";
+import {
+  categoriesQuery,
+  CATEGORIES_KEY,
+  type Category,
+} from "@/features/categories/api";
 import { usePageParam } from "@/hooks/use-page-param";
 import { apiBaseUrl } from "@/lib/api/base-url";
 import { useAuth } from "@/providers/auth-provider";
@@ -30,32 +35,6 @@ const categorySchema = z.object({
 });
 
 type CategoryValues = z.infer<typeof categorySchema>;
-
-/** One row of the vocabulary (GLOSSARY Category). */
-export type Category = { id: number; name: string; active: boolean };
-
-export const CATEGORIES_KEY = ["categories"] as const;
-
-/**
- * One page of categories. The page goes on the wire (`?page=`, 0-based —
- * the same number the URL carries, ADR 0019), so every row is reachable;
- * the API's default first page can only ever hold 100 (api-design size
- * ≤ 100).
- */
-export async function fetchCategories(
-  page: number,
-): Promise<PagedEnvelope<Category>> {
-  const response = await fetch(
-    `${apiBaseUrl()}/api/categories?page=${page}`,
-    {
-      credentials: "include",
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`GET /api/categories -> ${response.status}`);
-  }
-  return (await response.json()) as PagedEnvelope<Category>;
-}
 
 /**
  * The categories surface: list for everyone, write controls for ADMIN only
@@ -83,10 +62,7 @@ export function CategoriesPanel() {
   // each page is its own cache entry, and the prefix invalidation below
   // still clears all of them after a write.
   const { page, goToPage } = usePageParam();
-  const { data, error } = useQuery({
-    queryKey: [...CATEGORIES_KEY, page],
-    queryFn: () => fetchCategories(page),
-  });
+  const { data, error } = useQuery(categoriesQuery(page));
 
   /**
    * One place a write refusal lands: field messages on the field they name

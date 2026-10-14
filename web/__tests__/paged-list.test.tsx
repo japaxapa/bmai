@@ -171,7 +171,7 @@ describe("paged list", () => {
     expect(screen.queryByText("Should not render")).toBeNull();
   });
 
-  test("shows the loading state while the fetch is in flight", () => {
+  test("shows the table skeleton while the fetch is in flight", () => {
     render(
       <PagedList onPageChange={() => {}}>
         <ul>
@@ -180,7 +180,12 @@ describe("paged list", () => {
       </PagedList>,
     );
 
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    // The same skeleton the server seed uses as its Suspense fallback
+    // (ADR 0020) — one visual for every "the rows aren't here yet".
+    expect(
+      screen.getByRole("status", { name: "Loading…" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Should not render yet")).toBeNull();
   });
 
   test("reads a garbage ?page= as the first page", async () => {

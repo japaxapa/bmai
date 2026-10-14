@@ -6,7 +6,7 @@ import { server } from "@/test/server";
 import { makeEnvelope } from "@/test/envelope";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { AppProviders } from "@/providers";
-import CategoriesPage from "@/app/(dashboard)/categories/page";
+import { CategoriesPanel } from "@/app/(dashboard)/categories/_components/categories-panel";
 import { Toaster } from "@/components/ui/sonner";
 
 // jsdom never mounts the app router, so anything calling useRouter() /
@@ -23,18 +23,21 @@ function signInAs(role: Role, email: string) {
   server.use(http.get(ME_URL, () => HttpResponse.json({ email, role })));
 }
 
+// The page is an async server component (#44: it seeds the list during the
+// HTML render), which jsdom cannot render — the panel island is the test seam
+// (testing-strategy §4); the seed itself is covered in seed.test.tsx.
 function renderPage() {
   return render(
     <AppProviders>
-      <CategoriesPage />
+      <CategoriesPanel />
     </AppProviders>,
   );
 }
 
-describe("categories page", () => {
-  // Every test names its own rows: the query client is shared for the file,
-  // so a name used twice could be answered from the previous test's cache
-  // instead of this test's handler.
+describe("categories panel", () => {
+  // Each render gets a fresh QueryClient (query-provider's test branch,
+  // ADR 0020), so no test can be answered from another test's cache — the
+  // row names below are scenario names, not cache hygiene.
   test("lists the categories the API returns, flagging the switched-off ones", async () => {
     signInAs("ADMIN", "admin@bms.local");
     server.use(
@@ -312,7 +315,7 @@ describe("categories page", () => {
     render(
       <AppProviders>
         <Toaster />
-        <CategoriesPage />
+        <CategoriesPanel />
       </AppProviders>,
     );
     await screen.findByText("Sucos");
