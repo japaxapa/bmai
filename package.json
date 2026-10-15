@@ -6,7 +6,8 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace web",
-    "test": "npm run test --workspace web"
+    "test": "npm run test --workspace web",
+    "test:e2e": "npm run test:e2e --workspace web"
   },
   "allowScripts": {
     "unrs-resolver@1.12.2": true,

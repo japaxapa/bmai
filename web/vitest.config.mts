@@ -11,5 +11,8 @@ export default defineConfig({
     setupFiles: ["./test/setup.ts"],
     restoreMocks: true,
     unstubEnvs: true,
+    // e2e/ is Playwright's (test:e2e) — vitest must not try to run it in
+    // jsdom, and playwright must not try to run vitest's tests.
+    exclude: ["e2e/**", "node_modules/**"],
   },
 });

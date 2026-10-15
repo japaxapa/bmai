@@ -61,6 +61,15 @@ The seeded admin also manages the product vocabulary on `/categories` — create
 
 The UI talks straight to the API (no BFF), so it needs the API base URL when it isn't the `:8081` default: `NEXT_PUBLIC_API_BASE_URL` (inlined into the browser bundle at build time — the only callers are client components). E.g. with the backend on `:8090`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8090 npm run dev --workspace web`. CORS allows exactly `http://localhost:3000` with credentials (ADR 0015).
 
+### Run the e2e suite (Playwright)
+
+```sh
+npx playwright install chromium   # once per machine
+npm run test:e2e                  # from the repo root
+```
+
+The suite owns its own stack (testing-strategy §5): it brings up the compose Postgres, **recreates a throwaway `bms_e2e` database** (your dev `bms` data is never touched), boots the backend on `:8082` against it — deliberately distinct from the dev default `:8081` and the agent-prone `:8080` (`web/e2e/support/api-base.ts`) — and runs `next build && next start` — a production build, because server-seeded first paint (ADR 0020) is a production-rendering behavior. Every run starts from freshly migrated schema and zero rows. Nothing may be listening on `:3000`/`:8082` (the harness refuses to reuse a dev server, so the AC is never "proven" against the wrong renderer). Specs live in `web/e2e/`; the shared fixtures (API login, authenticated requests, unique names) are in `web/e2e/support/fixtures.ts`. CI wiring is ticket #24's.
+
 ## Docs
 
 ```text
