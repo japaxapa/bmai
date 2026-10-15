@@ -1,0 +1,451 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+import { PagedList } from "@/components/shared/paged-list";
+import { categoriesQuery } from "@/features/categories/api";
+import {
+  PRODUCTS_KEY,
+  productsQuery,
+  type Product,
+  type ProductBody,
+} from "@/features/products/api";
+import { usePageParam } from "@/hooks/use-page-param";
+import { useSearchParam } from "@/hooks/use-search-param";
+import { apiBaseUrl } from "@/lib/api/base-url";
+import { useAuth } from "@/providers/auth-provider";
+
+/** What the API refuses with: RFC 9457, possibly carrying field errors. */
+type Problem = {
+  status?: number;
+  detail?: string;
+  fieldErrors?: Record<string, string[]>;
+};
+
+async function refusalFrom(response: Response): Promise<Problem> {
+  return (await response.json().catch(() => ({}))) as Problem;
+}
+
+// Shape courtesy only (frontend-architecture §Forms): zod gates the empty
+// boxes before they reach the API; react-hook-form owns registration, touched
+// state and where the messages land. No caps or ranges here — the server owns
+// them (price > 0, cost ≥ 0, minimum stock ≥ 0 — the 422s), and its messages
+// are the ones the fields must show.
+const productSchema = z.object({
+  sku: z.string().min(1, "SKU is required."),
+  name: z.string().min(1, "Name is required."),
+  description: z.string(),
+  price: z.string().min(1, "Price is required."),
+  cost: z.string(),
+  minimumStock: z.string(),
+  categoryId: z.string().min(1, "A category is required."),
+});
+
+type ProductValues = z.infer<typeof productSchema>;
+
+const EMPTY: ProductValues = {
+  sku: "",
+  name: "",
+  description: "",
+  price: "",
+  cost: "",
+  minimumStock: "",
+  categoryId: "",
+};
+
+/** Form strings → the DTO's numbers; an empty optional box simply stays out. */
+function toBody(values: ProductValues): ProductBody {
+  return {
+    sku: values.sku.trim(),
+    name: values.name.trim(),
+    description: values.description.trim() || null,
+    price: Number(values.price),
+    ...(values.cost.trim() === "" ? {} : { cost: Number(values.cost) }),
+    ...(values.minimumStock.trim() === ""
+      ? {}
+      : { minimumStock: Number(values.minimumStock) }),
+    categoryId: Number(values.categoryId),
+  };
+}
+
+/**
+ * The products surface: list for everyone signed in, write controls for
+ * ADMIN/MANAGER (business-rules §4) — UI hides by role, the backend
+ * re-checks every request independently (frontend-architecture §State).
+ */
+export function ProductsPanel() {
+  const { user } = useAuth();
+  const canWrite = user?.role === "ADMIN" || user?.role === "MANAGER";
+  const queryClient = useQueryClient();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors },
+  } = useForm<ProductValues>({ defaultValues: EMPTY });
+
+  const [conflict, setConflict] = useState<string | null>(null);
+  // The row being edited, if any: the same form doubles as create and edit
+  // (one record of field rules — create cannot drift from edit).
+  const [editing, setEditing] = useState<Product | null>(null);
+
+  // The page lives in the URL (usePageParam) and so does the search term
+  // (useSearchParam, ADR 0019): both survive a reload and stay shareable,
+  // and the query key carries both — each (page, term) pair is its own
+  // cache entry, while the prefix invalidation below clears all of them.
+  const { page, goToPage } = usePageParam();
+  const [search, setSearch] = useSearchParam("search", ["page"]);
+  // The box's own value, so typing feels instant; it reaches the URL (and
+  // therefore the API) after a short pause — one request per thought, not
+  // one per keystroke.
+  const [term, setTerm] = useState(search);
+  useEffect(() => {
+    if (term === search) return;
+    const timer = setTimeout(() => setSearch(term), 300);
+    return () => clearTimeout(timer);
+  }, [term, search, setSearch]);
+  const { data, error } = useQuery(productsQuery(page, search));
+  // The category dropdown (business-rules §4: reading the vocabulary is open
+  // to every signed-in role precisely so this dropdown is never empty).
+  const { data: categories } = useQuery(categoriesQuery(0));
+
+  /**
+   * One place a write refusal lands: field messages on the field they name
+   * (checked first — a 400 carries both a detail sentence and fieldErrors,
+   * and the field's own message is the one that must win), any other
+   * sentence inline (the AC's "never a raw failure"), anything unrecognised
+   * as a toast (frontend-architecture §Forms).
+   */
+  const handleRefusal = (problem?: Problem) => {
+    if (problem?.fieldErrors) {
+      Object.entries(problem.fieldErrors).forEach(([field, messages]) =>
+        setError(field as keyof ProductValues, { message: messages.join(" ") }),
+      );
+      return;
+    }
+    if (problem?.detail) {
+      setConflict(problem.detail);
+      return;
+    }
+    toast.error("The request was refused");
+  };
+
+  /**
+   * A row action (status flip) has no form to print into, so its refusal
+   * takes the toast channel — frontend-architecture §Forms' fallback for
+   * anything without a field. Writing it into `conflict` instead would show
+   * an unrelated row's failure under the create form, where it reads as a
+   * SKU conflict.
+   */
+  const rowActionRefused = (problem?: Problem) => {
+    toast.error(problem?.detail ?? "The request was refused");
+  };
+
+  const changeStatus = useMutation({
+    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
+      const response = await fetch(`${apiBaseUrl()}/api/products/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ active }),
+      });
+      if (!response.ok) {
+        throw await refusalFrom(response);
+      }
+      return (await response.json()) as Product;
+    },
+    onSuccess: async () => {
+      setConflict(null);
+      await queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+    onError: rowActionRefused,
+  });
+
+  const edit = useMutation({
+    mutationFn: async ({
+      id,
+      values,
+    }: {
+      id: number;
+      values: ProductValues;
+    }) => {
+      const response = await fetch(`${apiBaseUrl()}/api/products/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(toBody(values)),
+      });
+      if (!response.ok) {
+        throw await refusalFrom(response);
+      }
+      return (await response.json()) as Product;
+    },
+    // Close the form and refetch: the row's new values come back from the
+    // API, never from what we typed.
+    onSuccess: async () => {
+      setEditing(null);
+      setConflict(null);
+      reset(EMPTY);
+      await queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+    onError: handleRefusal,
+  });
+
+  const create = useMutation({
+    mutationFn: async (values: ProductValues) => {
+      const response = await fetch(`${apiBaseUrl()}/api/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(toBody(values)),
+      });
+      if (!response.ok) {
+        throw await refusalFrom(response);
+      }
+      return (await response.json()) as Product;
+    },
+    // Only the refetch after the write can bring the new row in, so the list
+    // must be invalidated — not optimistically patched.
+    onSuccess: async () => {
+      setConflict(null);
+      reset(EMPTY);
+      await queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+    onError: handleRefusal,
+  });
+
+  const submit = handleSubmit((values) => {
+    const parsed = productSchema.safeParse(values);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].path[0] as keyof ProductValues, {
+        message: parsed.error.issues[0].message,
+      });
+      return;
+    }
+    setConflict(null);
+    if (editing) {
+      edit.mutate({ id: editing.id, values: parsed.data });
+    } else {
+      create.mutate(parsed.data);
+    }
+  });
+
+  return (
+    <main className="flex min-h-full flex-col gap-6 p-6">
+      <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
+
+      {/* Reading is open to every signed-in role — so is narrowing the read.
+          The server owns the filtering (api-design: ILIKE on name/sku). */}
+      <div className="flex max-w-xs flex-col gap-1.5">
+        <label htmlFor="product-search" className="text-sm font-medium">
+          Search
+        </label>
+        <input
+          id="product-search"
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+        />
+      </div>
+
+      {canWrite && (
+        <form onSubmit={submit} noValidate className="flex max-w-sm flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-sku" className="text-sm font-medium">
+              SKU
+            </label>
+            <input
+              id="product-sku"
+              aria-invalid={Boolean(errors.sku)}
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("sku")}
+            />
+            {errors.sku && (
+              <p role="alert" className="text-sm text-red-600">
+                {errors.sku.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-name" className="text-sm font-medium">
+              Name
+            </label>
+            <input
+              id="product-name"
+              aria-invalid={Boolean(errors.name)}
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("name")}
+            />
+            {errors.name && (
+              <p role="alert" className="text-sm text-red-600">
+                {errors.name.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-description" className="text-sm font-medium">
+              Description
+            </label>
+            <input
+              id="product-description"
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("description")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-price" className="text-sm font-medium">
+              Price
+            </label>
+            <input
+              id="product-price"
+              type="number"
+              step="0.01"
+              min="0"
+              aria-invalid={Boolean(errors.price)}
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("price")}
+            />
+            {errors.price && (
+              <p role="alert" className="text-sm text-red-600">
+                {errors.price.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-cost" className="text-sm font-medium">
+              Cost
+            </label>
+            <input
+              id="product-cost"
+              type="number"
+              step="0.01"
+              min="0"
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("cost")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-minimum-stock" className="text-sm font-medium">
+              Minimum stock
+            </label>
+            <input
+              id="product-minimum-stock"
+              type="number"
+              min="0"
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("minimumStock")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-category" className="text-sm font-medium">
+              Category
+            </label>
+            <select
+              id="product-category"
+              aria-invalid={Boolean(errors.categoryId)}
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("categoryId")}
+            >
+              <option value="">Choose a category</option>
+              {categories?.items.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            {errors.categoryId && (
+              <p role="alert" className="text-sm text-red-600">
+                {errors.categoryId.message}
+              </p>
+            )}
+          </div>
+
+          {conflict && (
+            <p role="alert" className="text-sm text-red-600">
+              {conflict}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={create.isPending || edit.isPending}
+            className="h-9 rounded-md bg-neutral-900 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900"
+          >
+            {editing ? "Save changes" : "Create product"}
+          </button>
+        </form>
+      )}
+
+      {/* The pager owns everything around the rows — states, summary,
+          prev/next bounds (ADR 0019); the rows themselves stay here. */}
+      <PagedList envelope={data} error={error} onPageChange={goToPage}>
+        <ul className="flex max-w-3xl flex-col gap-2">
+          {data?.items.map((product) => (
+            <li key={product.id} className="flex items-center gap-3">
+              <span className="w-28 truncate text-sm">{product.sku}</span>
+              <span className="w-48 truncate text-sm">{product.name}</span>
+              <span className="w-20 text-sm tabular-nums">
+                {product.price.toFixed(2)}
+              </span>
+              <span className="w-28 truncate text-sm text-neutral-500">
+                {product.categoryName}
+              </span>
+              {/* GLOSSARY "Deactivated": retired rows stay, marked — never gone. */}
+              <span className="w-24 text-sm text-neutral-500">
+                {product.active ? "Active" : "Deactivated"}
+              </span>
+              {canWrite && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${product.name}`}
+                    onClick={() => {
+                      // Seed the open form from the row itself — no second
+                      // fetch to fill it in (testing-strategy §4).
+                      setEditing(product);
+                      setConflict(null);
+                      reset({
+                        sku: product.sku,
+                        name: product.name,
+                        description: product.description ?? "",
+                        price: String(product.price),
+                        cost: String(product.cost),
+                        minimumStock: String(product.minimumStock),
+                        categoryId: String(product.categoryId),
+                      });
+                    }}
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${product.active ? "Deactivate" : "Reactivate"} ${product.name}`}
+                    onClick={() =>
+                      changeStatus.mutate({
+                        id: product.id,
+                        active: !product.active,
+                      })
+                    }
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                  >
+                    {product.active ? "Deactivate" : "Reactivate"}
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      </PagedList>
+    </main>
+  );
+}

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.testcontainers.junit.jupiter.Container;
@@ -16,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Seam 2 (agreed with the user): Flyway's migration history.
@@ -80,6 +82,26 @@ class FlywayMigrationsTest {
                 .as("re-running migrations must not apply anything new")
                 .isEqualTo(before);
         assertThat(pendingVersions()).isEmpty();
+    }
+
+    /**
+     * Ticket #41 (folded into V4): business-rules §5 declares the category
+     * name as 1–120 chars, and since V4 the *database* says so too — not
+     * only the request DTO's {@code @Size}. Both edges of the range bite:
+     * the overlong name, and the empty one the CHECK can see even when a
+     * future caller bypasses the API's {@code @NotBlank}.
+     */
+    @Test
+    void theCategoryNameLengthCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() ->
+                jdbc.update("insert into categories (name) values (?)", "x".repeat(121)))
+                .as("the 120-char cap is a CHECK, not only an @Size")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatThrownBy(() ->
+                jdbc.update("insert into categories (name) values (?)", ""))
+                .as("the 1-char floor is the same CHECK")
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private List<String> appliedVersions() {

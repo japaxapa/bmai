@@ -12,8 +12,8 @@ PostgreSQL + Flyway SQL migrations. Conventions: **bigint identity PKs**, `numer
 
 - `users` — email **unique** (login identity), password_hash, role enum, active flag.
 - `customers`, `suppliers` — profile + `document` **unique** each, email not unique, active flag, `payment_terms_days DEFAULT 30`.
-- `categories` — name **unique** case-insensitively (functional unique index on `lower(name)`), active flag.
-- `products` — sku **unique**, name, description, price (>0), cost (weighted avg ≥0), stock (≥0), minimum_stock (≥0), category FK, supplier FK, active flag.
+- `categories` — name **unique** case-insensitively (functional unique index on `lower(name)`), 1–120 chars (CHECK), active flag.
+- `products` — sku **unique** case-insensitively (functional unique index on `lower(sku)`), name, description, price (>0), cost (weighted avg ≥0), stock (≥0), minimum_stock (≥0), category FK **NOT NULL** (`ON DELETE RESTRICT`; the supplier FK joins this table with #7), active flag. Money columns `numeric(12,2)`; stock `INT`.
 - `orders` — customer FK, status enum (DRAFT, CONFIRMED, PROCESSING, COMPLETED, CANCELLED, RETURNED), total, number `ORD-YYYY-NNNN` unique, timestamps.
 - `order_items` — order FK, product FK, qty (>0), `unit_price` (locked at CONFIRM), `unit_cost` (written at PROCESSING, nullable until then), subtotal.
 - `invoices` — order FK unique (1:1), number `INV-YYYY-NNNN` unique, issue/due dates, total.
@@ -27,7 +27,7 @@ PostgreSQL + Flyway SQL migrations. Conventions: **bigint identity PKs**, `numer
 
 ## Indexes
 
-- All FKs. `orders(customer_id, created_at DESC)`, `orders(status)`. `movements(product_id, created_at)`. `invoices(due_date)`. `financial_transactions(occurred_on)`, `(invoice_id)`, `(payable_id)`.
+- All FKs. `products(lower(sku))` unique. `orders(customer_id, created_at DESC)`, `orders(status)`. `movements(product_id, created_at)`. `invoices(due_date)`. `financial_transactions(occurred_on)`, `(invoice_id)`, `(payable_id)`.
 - Search = `ILIKE` at this scale; pg_trgm → backlog.
 
 ## Migration order

@@ -31,7 +31,7 @@ A physical good bought and resold. Identified by SKU, has price, cost (weighted 
 _Avoid_: Item, article
 
 **SKU**:
-The unique stock-keeping identifier of a product.
+The unique stock-keeping identifier of a product. Any casing counts as the same SKU.
 _Avoid_: Code, barcode
 
 **Category**:

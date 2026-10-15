@@ -59,7 +59,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * construction. Seam B makes Postgres say no.
  */
 @WebMvcTest
-@Import({SecurityConfig.class, AuthService.class, CategoryService.class})
+@Import({SecurityConfig.class, AuthService.class, CategoryService.class, ProductService.class})
 class CategoryEndpointTest {
 
     @Autowired
@@ -126,6 +126,40 @@ class CategoryEndpointTest {
     }
 
     /**
+     * The products boundary arrives with its own ticket (#6) — this slice
+     * only needs the bean to exist, because the all-controllers scan now
+     * instantiates {@code ProductController} too. No behaviour is faked
+     * here; nothing in this file ever calls it.
+     */
+    @TestConfiguration
+    static class StubbedProducts {
+        @Bean
+        ProductRepository productRepository() {
+            return new ProductRepository() {
+                @Override
+                public List<ProductWithCategory> findAll(int page, int size, String search) {
+                    return List.of();
+                }
+
+                @Override
+                public long count(String search) {
+                    return 0;
+                }
+
+                @Override
+                public Optional<ProductWithCategory> findById(long id) {
+                    return Optional.empty();
+                }
+
+                @Override
+                public Product save(Product product) {
+                    return product;
+                }
+            };
+        }
+    }
+
+    /**
      * The agreed read side: the permission matrix gates *managing* categories
      * (ADMIN), not *seeing* them — otherwise the product form's dropdown is
      * empty for everyone but the owner. The envelope keys are asserted even
@@ -183,9 +217,9 @@ class CategoryEndpointTest {
     /**
      * business-rules §5: the name is 1–120 chars — the blank half is covered
      * above, this is the cap. Asserting the exact {@code @Size} message proves
-     * the refusal came from the length rule itself: it is the only current
-     * enforcement (the DB CHECK lands with the next schema migration, #41),
-     * and testing-strategy wants every domain rule to have its own test.
+     * the refusal came from the length rule itself (V4's DB CHECK is the
+     * backstop behind it, pinned in {@code FlywayMigrationsTest}), and
+     * testing-strategy wants every domain rule to have its own test.
      */
     @Test
     void overlongNameIsRefusedWithTheCapMessage() throws Exception {
