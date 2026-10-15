@@ -1,5 +1,7 @@
-/** The documented default (README quick start): the API on :8080. */
-export const DEFAULT_API_BASE_URL = "http://localhost:8080";
+/** The documented default (README quick start): the API on :8081 — the same
+ *  port application.properties gives the backend, and deliberately not :8080,
+ *  which system agents tend to squat. */
+export const DEFAULT_API_BASE_URL = "http://localhost:8081";
 
 /**
  * Where the API lives, per call — so a test or a run can point it elsewhere.

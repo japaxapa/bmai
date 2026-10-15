@@ -3,7 +3,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session-cookie";
 
 /**
  * The one server-side credential helper (`architecture.md` §4's "one
- * `lib/api` helper"): what a server-component fetch of `:8080` sends so the
+ * `lib/api` helper"): what a server-component fetch of `:8081` sends so the
  * backend sees the same session the browser would (ADR 0020).
  *
  * Forwards the cookie verbatim — decodes nothing, no `/auth/me`, and no
