@@ -69,7 +69,7 @@
 
 ## 5. Non-functional requirements
 
-- Local run: Next.js `:3000` → Spring `:8080` → Postgres `:5432` via docker compose (brief §8).
+- Local run: Next.js `:3000` → Spring `:8081` → Postgres `:5432` via docker compose (brief §8).
 - Migrations: Flyway SQL, versioned, in repo. No H2 in tests — Testcontainers Postgres (step 7).
 - API: REST, no `/v1` prefix (deliberate), paged envelope, sort whitelist, RFC 9457 errors (Q34, step 5).
 - Testing: every domain rule has ≥1 test; no coverage-percentage chasing (step 7).

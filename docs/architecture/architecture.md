@@ -35,7 +35,7 @@ com.example.bms/
 
 - Claims: `sub`, `role`, `exp`. BCrypt(10). ~12h token, logout = clear cookie. No refresh tokens (a token store is state).
 - CORS: exactly `http://localhost:3000` with credentials. CSRF disabled with documented rationale (JSON-only API + SameSite=Lax cookie).
-- Server components forward the cookie via one `lib/api` helper when calling `:8080`.
+- Server components forward the cookie via one `lib/api` helper when calling `:8081`.
 
 ## 5. Authorization — method security (Q33)
 
@@ -66,7 +66,7 @@ hooks/ lib/ types/                                       # generic hooks, api cl
 
 ## 8. Data fetching — hybrid, one owner per datum (Q36)
 
-- Dashboard = server component fetching `:8080` directly. Tables = client islands seeded with server-dehydrated state (ADR 0020; no double fetch). Filters in URL search params. Mutations → React Query invalidation. Direct `:8080` calls (no BFF proxy). `useEffect`-fetching banned.
+- Dashboard = server component fetching `:8081` directly. Tables = client islands seeded with server-dehydrated state (ADR 0020; no double fetch). Filters in URL search params. Mutations → React Query invalidation. Direct `:8081` calls (no BFF proxy). `useEffect`-fetching banned.
 
 ## 9. State, routes, forms (Q37–Q39)
 
