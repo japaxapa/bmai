@@ -1,6 +1,7 @@
 package com.example.bms.product;
 
 import com.example.bms.shared.PagedEnvelope;
+import com.example.bms.shared.PageSize;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -47,8 +48,8 @@ public class CategoryController {
     @GetMapping
     public PagedEnvelope<CategoryResponse> list(
             @RequestParam(defaultValue = "0") int page,
-            // Same rule as CategoryService.MAX_PAGE_SIZE: api-design size ≤ 100.
-            @RequestParam(defaultValue = "100") int size) {
+            // api-design size ≤ 100: the default and the services' clamp share PageSize.
+            @RequestParam(defaultValue = PageSize.DEFAULT_PAGE_SIZE) int size) {
         return categories.list(page, size);
     }
 

@@ -1,6 +1,7 @@
 package com.example.bms.product;
 
 import com.example.bms.shared.PagedEnvelope;
+import com.example.bms.shared.PageSize;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -18,9 +19,6 @@ import java.math.BigDecimal;
  */
 @Service
 public class ProductService {
-
-    /** api-design: {@code size ≤ 100} for every collection. */
-    static final int MAX_PAGE_SIZE = 100;
 
     private final ProductRepository products;
     private final CategoryRepository categories;
@@ -41,7 +39,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public PagedEnvelope<ProductResponse> list(int page, int size, String search) {
         var safePage = Math.max(page, 0);
-        var safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+        var safeSize = Math.clamp(size, 1, PageSize.MAX_PAGE_SIZE);
         var items = products.findAll(safePage, safeSize, search).stream()
                 .map(ProductService::responseOf)
                 .toList();

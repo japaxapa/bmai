@@ -1,6 +1,7 @@
 package com.example.bms.product;
 
 import com.example.bms.shared.PagedEnvelope;
+import com.example.bms.shared.PageSize;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -59,8 +60,8 @@ public class ProductController {
     @GetMapping
     public PagedEnvelope<ProductResponse> list(
             @RequestParam(defaultValue = "0") int page,
-            // Same rule as ProductService.MAX_PAGE_SIZE: api-design size ≤ 100.
-            @RequestParam(defaultValue = "100") int size,
+            // api-design size ≤ 100: the default and the services' clamp share PageSize.
+            @RequestParam(defaultValue = PageSize.DEFAULT_PAGE_SIZE) int size,
             // api-design: ILIKE over name and sku; blank (or absent) = no filter.
             @RequestParam(defaultValue = "") String search) {
         return products.list(page, size, search);
