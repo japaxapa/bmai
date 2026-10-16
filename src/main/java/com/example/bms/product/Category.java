@@ -26,4 +26,13 @@ public record Category(long id, String name, boolean active) {
     public Category withActive(boolean active) {
         return new Category(id, name, active);
     }
+
+    /**
+     * The insert path: same row, now carrying the identity column the
+     * database assigned — sibling of {@link #withActive}, so the
+     * repository never re-lists the fields by hand.
+     */
+    public Category withId(long id) {
+        return new Category(id, name, active);
+    }
 }

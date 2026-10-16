@@ -110,9 +110,7 @@ public class JdbcProductRepository implements ProductRepository {
                     product.sku(), product.name(), product.description(),
                     product.price(), product.cost(), product.minimumStock(),
                     product.stock(), product.categoryId(), product.active());
-            return new Product(id, product.sku(), product.name(), product.description(),
-                    product.price(), product.cost(), product.minimumStock(),
-                    product.stock(), product.categoryId(), product.active());
+            return product.withId(id);
         }
         jdbc.update(
                 "update products set sku = ?, name = ?, description = ?, price = ?, cost = ?, "

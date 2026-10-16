@@ -75,4 +75,15 @@ public record Product(
         return new Product(id, sku, name, description, price, cost,
                 minimumStock, stock, categoryId, active);
     }
+
+    /**
+     * The insert path: same row, now carrying the identity column the
+     * database assigned. Without this the repository would re-list all ten
+     * fields by hand — a clone list that must silently stay in agreement
+     * with the record's own shape.
+     */
+    public Product withId(long id) {
+        return new Product(id, sku, name, description, price, cost,
+                minimumStock, stock, categoryId, active);
+    }
 }
