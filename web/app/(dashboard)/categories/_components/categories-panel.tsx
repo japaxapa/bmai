@@ -160,7 +160,10 @@ export function CategoriesPanel() {
             )}
           </div>
           {refusal && (
-            <p role="alert" className="text-sm text-red-600">
+            <p
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+            >
               {refusal}
             </p>
           )}
