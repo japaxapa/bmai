@@ -80,7 +80,9 @@ class ProductEndToEndTest {
                 "categoryId", categoryId), cookie);
         assertThat(created.getStatusCode().value()).isEqualTo(201);
         var id = (Number) field(created.getBody(), "$.id");
-        assertThat(field(created.getBody(), "$.sku")).isEqualTo(sku);
+        assertThat(field(created.getBody(), "$.sku"))
+                .as("the API answers the canonical form, not the spelling posted (GLOSSARY)")
+                .isEqualTo(sku.toLowerCase());
         assertThat(field(created.getBody(), "$.categoryName"))
                 .as("the UI displays the name, so the API must resolve it")
                 .isEqualTo(categoryName);
@@ -94,8 +96,8 @@ class ProductEndToEndTest {
         var listed = get("/api/products", cookie);
         assertThat(listed.getStatusCode().value()).isEqualTo(200);
         assertThat(skusIn(field(listed.getBody(), "$.items")))
-                .as("the create above is visible in the list")
-                .contains(sku);
+                .as("the create above is visible in the list, under its canonical SKU")
+                .contains(sku.toLowerCase());
 
         var edited = put("/api/products/" + id, Map.of(
                 "sku", sku, "name", "Café 500g torra escura",
@@ -112,7 +114,7 @@ class ProductEndToEndTest {
         assertThat(field(deactivated.getBody(), "$.active")).isEqualTo(false);
 
         var after = get("/api/products", cookie);
-        assertThat(itemSkued(after.getBody(), sku))
+        assertThat(itemSkued(after.getBody(), sku.toLowerCase()))
                 .as("the edit and the deactivation both survived the round trip")
                 .isNotNull();
     }
@@ -124,24 +126,29 @@ class ProductEndToEndTest {
      * come from the constraint — so a second identical POST answers
      * identically whether or not anyone checked first.
      *
-     * <p>Both spellings run through that same path: "cafe-1" after
-     * "CAFE-1" repeats the SKU, it does not invent a second product (the
-     * functional index on {@code lower(sku)} — the choice settled with the
-     * user, mirroring category names).
+     * <p>Every spelling runs through that same path: "cafe-1" after
+     * "CAFE-1" repeats the SKU, and so does " CAFE-1 " — the canonical form
+     * (GLOSSARY) collapses them before the index ever sees them, so none of
+     * them can invent a second product.
      */
     @ParameterizedTest
     @CsvSource({
         "EXACT",
         "OTHER-CASE",
+        "PADDED",
     })
     void duplicateSkuIsRefusedWithProblemJsonByTheRealUniqueIndex(String repeat) {
         var cookie = adminCookie();
         var categoryId = createCategoryNamed(uniqueName("Bebidas"), cookie);
-        // One SKU per invocation, spelled twice: the exact repeat, or the
-        // same SKU in another case — both must collide with *this* test's
-        // own row, not trip over another test's data.
+        // One SKU per invocation, spelled twice: the exact repeat, another
+        // case, or the same SKU padded with spaces — all must collide with
+        // *this* test's own row, not trip over another test's data.
         var sku = uniqueSku("CAFE-1");
-        var secondSpelling = "EXACT".equals(repeat) ? sku : sku.toLowerCase();
+        var secondSpelling = switch (repeat) {
+            case "EXACT" -> sku;
+            case "PADDED" -> "  " + sku + "  ";
+            default -> sku.toLowerCase();
+        };
 
         var created = post("/api/products", newProduct(sku, categoryId), cookie);
         assertThat(created.getStatusCode().value()).as("the first one is new").isEqualTo(201);
@@ -220,14 +227,14 @@ class ProductEndToEndTest {
 
         var bySku = get("/api/products?search=" + cafeSku.toLowerCase(), cookie);
         assertThat(skusIn(field(bySku.getBody(), "$.items")))
-                .as("lowercase term, uppercase sku — the index's notion of a SKU")
-                .containsExactly(cafeSku);
+                .as("the stored SKU is canonical (lowercase), and the match reaches it")
+                .containsExactly(cafeSku.toLowerCase());
 
         var byName = get("/api/products?search=500G", cookie);
         assertThat(skusIn(field(byName.getBody(), "$.items")))
-                .as("the name column searches too, also case-insensitively")
-                .contains(cafeSku)
-                .doesNotContain(trigoSku);
+                .as("the name column searches case-insensitively too — names keep their casing, so this is ILIKE's own work")
+                .contains(cafeSku.toLowerCase())
+                .doesNotContain(trigoSku.toLowerCase());
 
         var noMatch = get("/api/products?search=nao-existe", cookie);
         assertThat((Integer) field(noMatch.getBody(), "$.total")).isZero();

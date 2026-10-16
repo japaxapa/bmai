@@ -189,7 +189,9 @@ class ProductEndpointTest {
                 .andExpect(status().isCreated())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.sku").value("CAFE-1"))
+                // The API echoes the canonical form (GLOSSARY "Canonical
+                // form"): what was posted was canonicalized, not stored raw.
+                .andExpect(jsonPath("$.sku").value("cafe-1"))
                 .andExpect(jsonPath("$.name").value("Café 500g"))
                 .andExpect(jsonPath("$.description").value("Torra média"))
                 .andExpect(jsonPath("$.price").value(24.90))
@@ -350,7 +352,7 @@ class ProductEndpointTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sku\":\"M-1\",\"name\":\"Café\",\"price\":1,\"categoryId\":7}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.sku").value("M-1"));
+                .andExpect(jsonPath("$.sku").value("m-1"));
     }
 
     /**
@@ -456,7 +458,9 @@ class ProductEndpointTest {
         mvc.perform(get("/api/products?search=cafe").with(user("clerk").roles("EMPLOYEE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
-                .andExpect(jsonPath("$.items[0].sku").value("CAFE-1"))
+                // The stubbed row is built through the entity like any other,
+                // so it carries its canonical (lowercase) SKU.
+                .andExpect(jsonPath("$.items[0].sku").value("cafe-1"))
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1));
     }

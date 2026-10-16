@@ -40,8 +40,16 @@ public record Product(
      * database would <em>round</em> it — 0.001 → 0.00 — turning a sub-cent
      * price into an unhandled CHECK violation (a 500, not this 422) and a
      * sub-cent cost into money that quietly changed value on the way in.
+     *
+     * <p>The SKU is <em>canonicalized</em>, not guarded (GLOSSARY "Canonical
+     * form"): trimmed and lowercased, so the unique index compares one
+     * spelling per identifier — "CAFE-1", "cafe-1" and " CAFE-1 " are the
+     * same SKU here, exactly as the index sees them. The name is trimmed
+     * only: it is display data, and "Padaria" must stay "Padaria".
      */
     public Product {
+        sku = sku.trim().toLowerCase();
+        name = name.trim();
         if (price.signum() <= 0) {
             throw new InvalidProductException("Price must be greater than zero.");
         }

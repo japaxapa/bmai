@@ -104,6 +104,38 @@ class FlywayMigrationsTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    /**
+     * V5 (GLOSSARY "Canonical form"): a unique text field is stored trimmed —
+     * and lowercased where it is an identifier (SKU). The entities
+     * canonicalize on the way in; these CHECKs are the backstop for a writer
+     * that is not the API (console, future import), the same layering V4
+     * gave the range checks.
+     */
+    @Test
+    void theCanonicalFormChecksBiteAtTheDatabaseLevel() {
+        var category = jdbc.queryForObject(
+                "insert into categories (name) values ('Canonical-Check') returning id",
+                Long.class);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into categories (name) values (?)", " Padded "))
+                .as("a name is stored trimmed — padding would invent a second row "
+                        + "the lower(name) index sees as distinct")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into products (sku, name, price, category_id) values (?, ?, ?, ?)",
+                "CAFE-PAD ", "Com espaço", 10, category))
+                .as("a SKU is stored trimmed and lowercase")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into products (sku, name, price, category_id) values (?, ?, ?, ?)",
+                "CAFE-UPPER", "Caixa alta", 10, category))
+                .as("the lowercase half of the same CHECK — the index's spelling is the only spelling")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private List<String> appliedVersions() {
         return Arrays.stream(flyway.info().applied())
                 .map(MigrationInfo::getVersion)
