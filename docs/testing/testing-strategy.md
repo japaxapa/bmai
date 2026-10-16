@@ -27,7 +27,7 @@ DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + st
 
 ## 4. Frontend (Vitest + Testing Library + MSW)
 
-`fieldErrors` → inline; role-hidden buttons; required-reason dialog; filter state in URL; seed hydration (no double fetch, ADR 0020). No shadcn-internals or snapshot-farming tests.
+`fieldErrors` → inline; refusal detail (409/422) → inline; role-hidden buttons; required-reason dialog; filter state in URL; seed hydration (no double fetch, ADR 0020). No shadcn-internals or snapshot-farming tests.
 
 ## 5. E2E (Playwright vs `docker compose`)
 
