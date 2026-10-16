@@ -51,7 +51,11 @@ public class ProductService {
     }
 
     /**
-     * Create: the category is loaded first so an unknown id answers 404
+     * Create: business-rules §4 row "Create/edit/deactivate product" —
+     * ADMIN and MANAGER write, EMPLOYEE does not. The reads stay ungated
+     * above; the URL layer requires a signed-in caller either way.
+     *
+     * <p>The category is loaded first so an unknown id answers 404
      * (api-design errors table) instead of becoming a foreign-key 500, and
      * its name travels back in the response — the UI renders what the API
      * answers rather than guessing it from the id it posted.
@@ -59,11 +63,6 @@ public class ProductService {
      * <p>A product is born usable ({@code active} true) and at zero stock:
      * the mirror column only ever moves with an inventory movement
      * (ADR 0006), never with a form.
-     */
-    /**
-     * Create: business-rules §4 row "Create/edit/deactivate product" —
-     * ADMIN and MANAGER write, EMPLOYEE does not. The reads stay ungated
-     * above; the URL layer requires a signed-in caller either way.
      */
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @Transactional

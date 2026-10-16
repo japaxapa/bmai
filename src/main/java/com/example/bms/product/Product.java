@@ -34,16 +34,31 @@ public record Product(
      * <p>{@code null} cost/minimumStock are the "born zero" defaults the
      * service fills in; price is required upstream (DTO), so a null price
      * is a programming error and fails loudly rather than silently.
+     *
+     * <p>Money is {@code numeric(12,2)} (database-design), so a value finer
+     * than cents is not one this domain can hold. Without the guard the
+     * database would <em>round</em> it — 0.001 → 0.00 — turning a sub-cent
+     * price into an unhandled CHECK violation (a 500, not this 422) and a
+     * sub-cent cost into money that quietly changed value on the way in.
      */
     public Product {
         if (price.signum() <= 0) {
             throw new InvalidProductException("Price must be greater than zero.");
         }
+        requireCents(price, "Price");
         if (cost.signum() < 0) {
             throw new InvalidProductException("Cost cannot be negative.");
         }
+        requireCents(cost, "Cost");
         if (minimumStock < 0) {
             throw new InvalidProductException("Minimum stock cannot be negative.");
+        }
+    }
+
+    /** At most two decimal places — the scale the money column can hold. */
+    private static void requireCents(BigDecimal money, String field) {
+        if (money.stripTrailingZeros().scale() > 2) {
+            throw new InvalidProductException(field + " can have at most two decimal places.");
         }
     }
 

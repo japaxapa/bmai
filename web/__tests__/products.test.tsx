@@ -67,7 +67,8 @@ function categoriesLoaded() {
 
 // The page is an async server component (#44: it seeds the list during the
 // HTML render), which jsdom cannot render — the panel island is the test seam
-// (testing-strategy §4); the seed itself is covered in seed.test.tsx.
+// (testing-strategy §4); the seed side (search-parse parity, hydration, no
+// double fetch) is pinned in seed.test.tsx against this panel.
 function renderPage() {
   return render(
     <AppProviders>

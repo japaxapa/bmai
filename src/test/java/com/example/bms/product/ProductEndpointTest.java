@@ -30,6 +30,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * type and body shape only. The database boundary is stubbed here; the real
  * case-insensitive SKU index and the real filter chain are exercised end to
  * end by {@link ProductEndToEndTest}.
+ *
+ * <p>testing-strategy §2 "cell delegation": the slice's 409 cell (duplicate
+ * SKU, refused by V4's {@code lower(sku)} index) is delegated to that E2E —
+ * a stubbed repository has no index to refuse with — and 401 lives once
+ * repo-wide in {@code AuthEndpointTest} (the filter chain doesn't vary per
+ * endpoint). The cells that do vary per endpoint — 400/422/403 — are all
+ * here.
  */
 @WebMvcTest
 @Import({SecurityConfig.class, AuthService.class, CategoryService.class, ProductService.class})
@@ -284,6 +291,38 @@ class ProductEndpointTest {
     }
 
     /**
+     * Money is {@code numeric(12,2)} (database-design): a value finer than
+     * cents is not a price the domain can hold. Left unchecked the database
+     * would *round* it — 0.001 → 0.00 — and the {@code price > 0} CHECK
+     * would fire as an unhandled {@code DataIntegrityViolationException}:
+     * a 500, not the 422 this API owes. The entity refuses first.
+     */
+    @Test
+    void subCentPriceIsRefusedAs422() throws Exception {
+        mvc.perform(post("/api/products").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sku\":\"A-5\",\"name\":\"Fracionado\",\"price\":0.001,\"categoryId\":7}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("Price can have at most two decimal places."));
+    }
+
+    /**
+     * The quieter half of the same rule: cost 9.999 rounds to 10.00, which
+     * the {@code cost >= 0} CHECK happily accepts — money silently changes
+     * value on the way in. The same domain refusal keeps the digits honest.
+     */
+    @Test
+    void subCentCostIsRefusedAs422() throws Exception {
+        mvc.perform(post("/api/products").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sku\":\"A-6\",\"name\":\"Custo fracionado\",\"price\":10,\"cost\":9.999,\"categoryId\":7}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("Cost can have at most two decimal places."));
+    }
+
+    /**
      * business-rules §4, row "Create/edit/deactivate product": ADMIN and
      * MANAGER write; EMPLOYEE is the one role a reader would assume is
      * privileged (it can create customers) but may not create products.
@@ -357,6 +396,23 @@ class ProductEndpointTest {
         mvc.perform(put("/api/products/7").with(user("clerk").roles("EMPLOYEE"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sku\":\"CAFE-1\",\"name\":\"Café\",\"price\":1,\"categoryId\":7}"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    /**
+     * The third write verb of the same matrix row — "Create/edit/deactivate
+     * product" (business-rules §4) — so the deny half is pinned for all
+     * three: a future {@code @PreAuthorize} that gates create and edit but
+     * leaves the status flip open would otherwise walk straight through
+     * (testing-strategy §3: every role × action cell).
+     */
+    @Test
+    void employeeCannotChangeProductStatus() throws Exception {
+        mvc.perform(put("/api/products/7/status").with(user("clerk").roles("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\":false}"))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(403));

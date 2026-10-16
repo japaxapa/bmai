@@ -15,19 +15,8 @@ import {
 } from "@/features/products/api";
 import { usePageParam } from "@/hooks/use-page-param";
 import { useSearchParam } from "@/hooks/use-search-param";
-import { apiBaseUrl } from "@/lib/api/base-url";
+import { writeJson, type Problem } from "@/lib/api/write";
 import { useAuth } from "@/providers/auth-provider";
-
-/** What the API refuses with: RFC 9457, possibly carrying field errors. */
-type Problem = {
-  status?: number;
-  detail?: string;
-  fieldErrors?: Record<string, string[]>;
-};
-
-async function refusalFrom(response: Response): Promise<Problem> {
-  return (await response.json().catch(() => ({}))) as Problem;
-}
 
 // Shape courtesy only (frontend-architecture §Forms): zod gates the empty
 // boxes before they reach the API; react-hook-form owns registration, touched
@@ -88,7 +77,7 @@ export function ProductsPanel() {
     formState: { errors },
   } = useForm<ProductValues>({ defaultValues: EMPTY });
 
-  const [conflict, setConflict] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
   // The row being edited, if any: the same form doubles as create and edit
   // (one record of field rules — create cannot drift from edit).
   const [editing, setEditing] = useState<Product | null>(null);
@@ -128,7 +117,7 @@ export function ProductsPanel() {
       return;
     }
     if (problem?.detail) {
-      setConflict(problem.detail);
+      setRefusal(problem.detail);
       return;
     }
     toast.error("The request was refused");
@@ -137,58 +126,32 @@ export function ProductsPanel() {
   /**
    * A row action (status flip) has no form to print into, so its refusal
    * takes the toast channel — frontend-architecture §Forms' fallback for
-   * anything without a field. Writing it into `conflict` instead would show
-   * an unrelated row's failure under the create form, where it reads as a
-   * SKU conflict.
+   * anything without a field. Writing it into `refusal` instead would show
+   * an unrelated row's failure under the create form, where a reader would
+   * take it for the duplicate-SKU conflict the form's own refusals carry.
    */
   const rowActionRefused = (problem?: Problem) => {
     toast.error(problem?.detail ?? "The request was refused");
   };
 
   const changeStatus = useMutation({
-    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
-      const response = await fetch(`${apiBaseUrl()}/api/products/${id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ active }),
-      });
-      if (!response.ok) {
-        throw await refusalFrom(response);
-      }
-      return (await response.json()) as Product;
-    },
+    mutationFn: ({ id, active }: { id: number; active: boolean }) =>
+      writeJson<Product>(`/api/products/${id}/status`, "PUT", { active }),
     onSuccess: async () => {
-      setConflict(null);
+      setRefusal(null);
       await queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
     },
     onError: rowActionRefused,
   });
 
   const edit = useMutation({
-    mutationFn: async ({
-      id,
-      values,
-    }: {
-      id: number;
-      values: ProductValues;
-    }) => {
-      const response = await fetch(`${apiBaseUrl()}/api/products/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(toBody(values)),
-      });
-      if (!response.ok) {
-        throw await refusalFrom(response);
-      }
-      return (await response.json()) as Product;
-    },
+    mutationFn: ({ id, values }: { id: number; values: ProductValues }) =>
+      writeJson<Product>(`/api/products/${id}`, "PUT", toBody(values)),
     // Close the form and refetch: the row's new values come back from the
     // API, never from what we typed.
     onSuccess: async () => {
       setEditing(null);
-      setConflict(null);
+      setRefusal(null);
       reset(EMPTY);
       await queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
     },
@@ -196,22 +159,12 @@ export function ProductsPanel() {
   });
 
   const create = useMutation({
-    mutationFn: async (values: ProductValues) => {
-      const response = await fetch(`${apiBaseUrl()}/api/products`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(toBody(values)),
-      });
-      if (!response.ok) {
-        throw await refusalFrom(response);
-      }
-      return (await response.json()) as Product;
-    },
+    mutationFn: (values: ProductValues) =>
+      writeJson<Product>("/api/products", "POST", toBody(values)),
     // Only the refetch after the write can bring the new row in, so the list
     // must be invalidated — not optimistically patched.
     onSuccess: async () => {
-      setConflict(null);
+      setRefusal(null);
       reset(EMPTY);
       await queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
     },
@@ -226,7 +179,7 @@ export function ProductsPanel() {
       });
       return;
     }
-    setConflict(null);
+    setRefusal(null);
     if (editing) {
       edit.mutate({ id: editing.id, values: parsed.data });
     } else {
@@ -370,9 +323,9 @@ export function ProductsPanel() {
             )}
           </div>
 
-          {conflict && (
+          {refusal && (
             <p role="alert" className="text-sm text-red-600">
-              {conflict}
+              {refusal}
             </p>
           )}
           <button
@@ -412,7 +365,7 @@ export function ProductsPanel() {
                       // Seed the open form from the row itself — no second
                       // fetch to fill it in (testing-strategy §4).
                       setEditing(product);
-                      setConflict(null);
+                      setRefusal(null);
                       reset({
                         sku: product.sku,
                         name: product.name,

@@ -10,6 +10,11 @@ JUnit 5 + AssertJ. Every order transition legal + illegal; cancel-vs-return spli
 
 DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + status (409/422 split); 401/403 paths.
 
+**Cell delegation** — where a cell lives when this seam can't raise it (say so in the slice's javadoc when delegating, so an audit of the checklist above doesn't read as a gap):
+
+- **409 backed by a DB constraint** → §3, where the constraint is real. The slice's stubbed repository has no unique index, so the refusal is only pinnable where Postgres itself refuses the row — for a functional `lower()` index, both spellings must collide. Business-rule 409s the *service* raises (row-lock race) stay in §3 too.
+- **401** → once repo-wide (`AuthEndpointTest`), not per slice: the session gate is the filter chain and doesn't vary per endpoint. Per-slice, only the **403** cells vary — each `@PreAuthorize` is its own role × action cell (§3's matrix).
+
 ## 3. Integration (Testcontainers)
 
 - Migrations run for real; CHECK/unique constraints bite.

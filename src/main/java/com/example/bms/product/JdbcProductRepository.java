@@ -20,6 +20,18 @@ public class JdbcProductRepository implements ProductRepository {
             "p.id, p.sku, p.name, p.description, p.price, p.cost, "
                     + "p.minimum_stock, p.stock, p.category_id, p.active";
 
+    /**
+     * The live-search predicate, in one place — {@link #findAll} and
+     * {@link #count} must filter identically forever: the envelope's
+     * {@code items} come from the first, its {@code total}/{@code
+     * totalPages} from the second, so a predicate edited in one and not the
+     * other makes the pager lie (N rows listed under a total that counted a
+     * different set). Growing the search to another column happens here,
+     * once.
+     */
+    private static final String SEARCH_PREDICATE =
+            "p.sku ilike ? escape '\\' or p.name ilike ? escape '\\'";
+
     /** One mapping, used by every read: the join's category name rides along. */
     private static final RowMapper<ProductWithCategory> PRODUCT_ROW = (rs, rowNum) ->
             new ProductWithCategory(
@@ -51,7 +63,7 @@ public class JdbcProductRepository implements ProductRepository {
                 + "from products p join categories c on c.id = p.category_id "
                 + (term == null
                         ? ""
-                        : "where p.sku ilike ? escape '\\' or p.name ilike ? escape '\\' ")
+                        : "where " + SEARCH_PREDICATE + " ")
                 + "order by lower(p.sku), p.id limit ? offset ?";
         if (term == null) {
             return jdbc.query(sql, PRODUCT_ROW, size, (long) page * size);
@@ -62,12 +74,13 @@ public class JdbcProductRepository implements ProductRepository {
     @Override
     public long count(String search) {
         var term = likeTerm(search);
+        // Same alias as findAll's, so SEARCH_PREDICATE reads identically
+        // here; the categories join is not needed for counting.
         if (term == null) {
             return jdbc.queryForObject("select count(*) from products", Long.class);
         }
         return jdbc.queryForObject(
-                "select count(*) from products "
-                        + "where sku ilike ? escape '\\' or name ilike ? escape '\\'",
+                "select count(*) from products p where " + SEARCH_PREDICATE,
                 Long.class, term, term);
     }
 

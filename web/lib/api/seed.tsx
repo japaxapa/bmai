@@ -63,15 +63,17 @@ export async function seedTable<TQueryKey extends QueryKey>(
 }
 
 /**
- * The page the URL asks for — parse parity with the island (ADR 0020):
- * rebuild the URLSearchParams the island reads (every repeated value
- * appended, first one wins from `.get`) and run the same `toPage` over
- * `.get("page")` — a string[] from a repeated `?page=` must never reach
- * `toPage` directly.
+ * One named param from the page's `searchParams` prop — parse parity with
+ * the island, one implementation (ADR 0020): rebuild the URLSearchParams
+ * the island reads (every repeated value appended, first one wins from
+ * `.get`) and answer with the very read `useSearchParam` does client-side.
+ * A page hand-rolling its own parse is exactly the drift the rule forbids:
+ * the dehydrated entry would land under a key the island never looks for.
  */
-function pageFromSearchParams(
+export function paramFromSearchParams(
   searchParams: Record<string, string | string[] | undefined>,
-) {
+  name: string,
+): string | null {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
     if (Array.isArray(value)) {
@@ -80,7 +82,17 @@ function pageFromSearchParams(
       params.append(key, value);
     }
   }
-  return toPage(params.get("page"));
+  return params.get(name);
+}
+
+/**
+ * The page the URL asks for — parse parity with the island (ADR 0020):
+ * the shared `.get` above, then the same `toPage` the island runs over it.
+ */
+function pageFromSearchParams(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  return toPage(paramFromSearchParams(searchParams, "page"));
 }
 
 type TableSeedProps<TQueryKey extends QueryKey> = {

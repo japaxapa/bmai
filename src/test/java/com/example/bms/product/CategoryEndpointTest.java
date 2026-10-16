@@ -34,6 +34,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * only. The database boundary is stubbed here; the real unique index and the
  * real filter chain are exercised end to end by {@link CategoryEndToEndTest}.
  *
+ * <p>testing-strategy §2 "cell delegation": this slice's 409 cell (duplicate
+ * name, refused by V3's {@code lower(name)} index) is delegated to that E2E —
+ * a stubbed repository has no index to refuse with — and 401 lives once
+ * repo-wide in {@code AuthEndpointTest}. The per-endpoint cells (400/422/403)
+ * are all here.
+ *
  * <p>The decisions this file pins down, each settled with the user before a
  * line of it was written:
  * <ul>

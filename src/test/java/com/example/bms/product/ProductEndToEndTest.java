@@ -233,6 +233,39 @@ class ProductEndToEndTest {
         assertThat((Integer) field(noMatch.getBody(), "$.total")).isZero();
     }
 
+    /**
+     * The envelope must tell the truth about one set: {@code items} come
+     * from the repository's findAll, {@code total} from its count — both
+     * filtered by the one shared predicate (JdbcProductRepository
+     * SEARCH_PREDICATE). A search matching several rows therefore pins what
+     * a drifted copy would break: total equals the matched rows, and paging
+     * through them never gains or loses one.
+     */
+    @Test
+    void searchTotalMatchesTheListedRows() {
+        var cookie = adminCookie();
+        var categoryId = createCategoryNamed(uniqueName("Padaria"), cookie);
+        // One unique term, several rows — carried by the SKU alone (names
+        // stay unrelated), so a count that filters a different column set
+        // than findAll sees zero: that is the drift this test pins.
+        var term = "DRIFT-" + sequence.incrementAndGet();
+        for (int i = 0; i < 3; i++) {
+            assertThat(post("/api/products", Map.of(
+                    "sku", uniqueSku(term + "-" + i), "name", "Produto sem o termo " + i,
+                    "price", "10.00", "categoryId", categoryId), cookie)
+                    .getStatusCode().value()).isEqualTo(201);
+        }
+
+        var found = get("/api/products?search=" + term, cookie);
+
+        assertThat((Integer) field(found.getBody(), "$.total"))
+                .as("count saw the same rows findAll listed")
+                .isEqualTo(3);
+        assertThat(skusIn(field(found.getBody(), "$.items")))
+                .as("and every one of them is on the page")
+                .hasSize(3);
+    }
+
     /** Creates a category through its own API and answers its id. */
     private long createCategoryNamed(String name, String cookie) {
         var response = post("/api/categories", Map.of("name", name), cookie);
