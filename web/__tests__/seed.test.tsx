@@ -6,11 +6,14 @@ import { SESSION_COOKIE } from "@/lib/auth/session-cookie";
 import { sessionInit } from "@/lib/api/server";
 import { seedTable } from "@/lib/api/seed";
 import { categoriesQuery } from "@/features/categories/api";
+import { productsQuery } from "@/features/products/api";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { makeEnvelope } from "@/test/envelope";
 import { server } from "@/test/server";
 import { AppProviders } from "@/providers";
 import { CategoriesPanel } from "@/app/(dashboard)/categories/_components/categories-panel";
+import { ProductsPanel } from "@/app/(dashboard)/products/_components/products-panel";
+import { productsSeedQuery } from "@/app/(dashboard)/products/page";
 
 // jsdom never mounts the app router: the island's usePageParam() would blow
 // up without this double (same double categories.test.tsx installs).
@@ -184,6 +187,113 @@ describe("server seed", () => {
     // island's refetch trigger must fire nothing: wait long enough to catch
     // a wrong one, then prove the count never moved (the no-double-fetch
     // guarantee, testing-strategy §4 / ADR 0020).
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(gets).toBe(1);
+  });
+
+  // ADR 0020's parse-parity rule, for the products search term (the page's
+  // second URL parameter): the seed reads it through the same
+  // paramFromSearchParams the island's useSearchParam answers to, so for
+  // every URL a browser can carry the two must land on the same key — a
+  // repeated ?search= must resolve first-value-wins on both sides, never
+  // drift to "last wins" on one of them.
+  const searchCases: Array<
+    [name: string, expected: string, searchParams: Record<string, string | string[] | undefined>]
+  > = [
+    ["no search param", "", {}],
+    ["?search=caf", "caf", { search: "caf" }],
+    ["empty ?search=", "", { search: "" }],
+    ["repeated ?search=a&search=b", "a", { search: ["a", "b"] }],
+  ];
+  test.each(searchCases)(
+    "products seed reads %s as search %j",
+    async (_case, expected, searchParams) => {
+      const requested: (string | null)[] = [];
+      server.use(
+        http.get(`${DEFAULT_API_BASE_URL}/api/products`, ({ request }) => {
+          requested.push(new URL(request.url).searchParams.get("search"));
+          return HttpResponse.json(makeEnvelope([]));
+        }),
+      );
+
+      const state = await seedTable(productsSeedQuery(searchParams), searchParams);
+
+      // An empty term is no filter at all (api-design), so the wire carries
+      // nothing; any other term rides verbatim.
+      expect(requested).toEqual([expected === "" ? null : expected]);
+      // Key-addressed (ADR 0020): the dehydrated entry sits exactly where
+      // the island will look for it — same factory, same term.
+      expect(state.queries[0].queryKey).toEqual(productsQuery(0, expected).queryKey);
+    },
+  );
+
+  // The full products parity claim, end to end: a URL carrying a search
+  // term seeds through the page's own factory (productsSeedQuery), and the
+  // real panel — reading the very same term from the URL through
+  // useSearchParam — must find the seeded rows under its own key. If the
+  // page's parse and the island's ever disagree, the keys diverge, the
+  // island refetches, and the count below moves: that is the drift ADR
+  // 0020 requires a test to pin, pinned.
+  test("hydrates the products island under a search URL: rows on first paint, no client refetch", async () => {
+    let gets = 0;
+    let requestedSearch: string | null = null;
+    server.use(
+      http.get(`${DEFAULT_API_BASE_URL}/api/products`, ({ request }) => {
+        gets += 1;
+        const url = new URL(request.url);
+        requestedSearch = url.searchParams.get("search");
+        const page = Number(url.searchParams.get("page") ?? "0");
+        return HttpResponse.json(
+          makeEnvelope(
+            [
+              {
+                id: 1,
+                sku: "CAFE-1",
+                name: "Café 500g",
+                description: null,
+                price: 24.9,
+                cost: 15,
+                minimumStock: 2,
+                stock: 0,
+                categoryId: 1,
+                categoryName: "Padaria",
+                active: true,
+              },
+            ],
+            { page },
+          ),
+        );
+      }),
+      // The island's category dropdown fetches too — its handler must not
+      // fall through to the erroring default.
+      http.get(`${DEFAULT_API_BASE_URL}/api/categories`, () =>
+        HttpResponse.json(makeEnvelope([{ id: 1, name: "Padaria", active: true }])),
+      ),
+    );
+    session.cookie = "seed-token";
+
+    // The URL the island will read its term from: ?search= on the products
+    // route, exactly as the page's search box leaves it.
+    window.history.replaceState({}, "", "/products?search=caf");
+
+    const searchParams = { search: "caf" };
+    const state = await seedTable(productsSeedQuery(searchParams), searchParams);
+    expect(gets).toBe(1); // exactly the seed's fetch
+    expect(requestedSearch).toBe("caf"); // the term rode on the wire
+
+    render(
+      <AppProviders>
+        <HydrationBoundary state={state}>
+          <ProductsPanel />
+        </HydrationBoundary>
+      </AppProviders>,
+    );
+
+    expect(screen.getByText("Café 500g")).toBeInTheDocument();
+
+    // No refetch within staleTime: the island's key (page + term from the
+    // URL) is the seed's key (term parsed by the page) — parity, proven by
+    // the count never moving.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(gets).toBe(1);
   });

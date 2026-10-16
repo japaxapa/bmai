@@ -60,4 +60,4 @@ Enforced by `@PreAuthorize` on write services; URL layer is authenticated-only. 
 
 - Deactivated product/customer/supplier: blocked in all *new* documents; blocks **confirm** if sitting in a DRAFT; in-flight flows complete; history never rewired.
 - Deactivated **user**: the password stops authenticating — login answers the same indistinguishable `401` as any bad login (never "account disabled"). A JWT issued *before* deactivation keeps working until it expires: with no token store (ADR 0015), deactivation revokes the next login, not the current session. Users are deactivated, never deleted.
-- `document` unique per party table (DB); `email` not unique. SKU unique. Category name unique, **case-insensitive** (unique index on `lower(name)`), 1–120 chars.
+- `document` unique per party table (DB); `email` not unique. SKU unique, **case-insensitive** (unique index on `lower(sku)`, V4) and stored in **canonical form** — trimmed + lowercase (entity + DB CHECK since V5; GLOSSARY "Canonical form"). Category name unique, **case-insensitive** (unique index on `lower(name)`), 1–120 chars (DB CHECK since V4), stored trimmed (entity + DB CHECK since V5).

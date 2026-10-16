@@ -19,7 +19,13 @@ auth:       POST /api/auth/login  POST /api/auth/logout  GET /api/auth/me
             PUT /api/auth/password (needs current password)
 users:      CRUD (ADMIN) + PUT /users/{id}/status
 categories: CRUD (ADMIN) + PUT /categories/{id}/status — list open to any signed-in role; name 1–120 chars, unique ignoring case
-customers / products / suppliers: CRUD + status + search/filter/pagination
+customers / suppliers: CRUD + status + search/filter/pagination
+products: CRUD + status + `?search=` (ILIKE on name and sku) + pagination — list open to
+  any signed-in role, writes ADMIN/MANAGER (business-rules §4). sku unique ignoring case
+  (409) and canonicalized on write — trimmed + lowercase, and the response echoes the
+  canonical form, not the spelling posted (GLOSSARY "Canonical form"); category required —
+  unknown categoryId is a 404; price > 0, cost ≥ 0,
+  minimum stock ≥ 0 (422). Supplier link arrives with #7.
 orders:
   GET /api/orders  GET /api/orders/{id}  POST /api/orders
   PUT /api/orders/{id} (draft only)  — no DELETE, ever
