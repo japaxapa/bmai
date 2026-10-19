@@ -62,7 +62,7 @@ public class JdbcCategoryRepository implements CategoryRepository {
                     "insert into categories (name, active) values (?, ?) returning id",
                     Long.class,
                     category.name(), category.active());
-            return new Category(id, category.name(), category.active());
+            return category.withId(id);
         }
         jdbc.update(
                 "update categories set name = ?, active = ? where id = ?",

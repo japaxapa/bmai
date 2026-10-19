@@ -8,7 +8,12 @@ JUnit 5 + AssertJ. Every order transition legal + illegal; cancel-vs-return spli
 
 ## 2. Slices (`@WebMvcTest`)
 
-DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + status (409/422 split); 401/403 paths.
+DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + status (409/422 split); 403 paths (401 and the DB-backed 409 are delegated — see Cell delegation below).
+
+**Cell delegation** — where a cell lives when this seam can't raise it (say so in the slice's javadoc when delegating, so an audit of the checklist above doesn't read as a gap):
+
+- **409 backed by a DB constraint** → §3, where the constraint is real. The slice's stubbed repository has no unique index, so the refusal is only pinnable where Postgres itself refuses the row — for a functional `lower()` index, both spellings must collide. Business-rule 409s the *service* raises (row-lock race) stay in §3 too.
+- **401** → once repo-wide (`AuthEndpointTest`), not per slice: the session gate is the filter chain and doesn't vary per endpoint. Per-slice, only the **403** cells vary — each `@PreAuthorize` is its own role × action cell (§3's matrix).
 
 ## 3. Integration (Testcontainers)
 
@@ -22,7 +27,7 @@ DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + st
 
 ## 4. Frontend (Vitest + Testing Library + MSW)
 
-`fieldErrors` → inline; role-hidden buttons; required-reason dialog; filter state in URL; seed hydration (no double fetch, ADR 0020). No shadcn-internals or snapshot-farming tests.
+`fieldErrors` → inline; refusal detail (409/422) → inline; role-hidden buttons; required-reason dialog; filter state in URL; seed hydration (no double fetch, ADR 0020). No shadcn-internals or snapshot-farming tests.
 
 ## 5. E2E (Playwright vs `docker compose`)
 

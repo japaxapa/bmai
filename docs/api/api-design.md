@@ -19,7 +19,14 @@ auth:       POST /api/auth/login  POST /api/auth/logout  GET /api/auth/me
             PUT /api/auth/password (needs current password)
 users:      CRUD (ADMIN) + PUT /users/{id}/status
 categories: CRUD (ADMIN) + PUT /categories/{id}/status — list open to any signed-in role; name 1–120 chars, unique ignoring case
-customers / products / suppliers: CRUD + status + search/filter/pagination
+customers / suppliers: CRUD + status + search/filter/pagination
+products: CRUD + status + `?search=` (ILIKE on name and sku) + pagination — list open to
+  any signed-in role, writes ADMIN/MANAGER (business-rules §4). sku unique ignoring case
+  (409) and canonicalized on write — trimmed + lowercase, and the response echoes the
+  canonical form, not the spelling posted (GLOSSARY "Canonical form"); category required —
+  unknown categoryId is a 404; price > 0, cost ≥ 0,
+  minimum stock ≥ 0, and money at most two decimal places (422 — the numeric(12,2)
+  column would round a finer value). Supplier link arrives with #7.
 orders:
   GET /api/orders  GET /api/orders/{id}  POST /api/orders
   PUT /api/orders/{id} (draft only)  — no DELETE, ever
@@ -56,9 +63,9 @@ One `@RestControllerAdvice` mapping the `BusinessException` hierarchy to `Proble
 | 401 / 403 | no/bad token / wrong role | employee posts an adjustment |
 | 404 | unknown id | `/orders/999` |
 | 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name |
-| 422 | business rule refuses | cost < 0 |
+| 422 | business rule refuses | cost < 0; price = 0.001 (cents scale) |
 | 500 | unexpected, no stack leak | bug |
 
-Frontend: `fieldErrors` → inline form errors; everything else → toast/banner.
+Frontend: `fieldErrors` → the field they name; a refusal's `detail` sentence (the 409/422 rows above) → inline where the user was acting; anything else → toast/banner.
 
 **Exception — `POST /api/auth/login` never returns 400.** A missing or malformed credential field answers the same `401` + `problem+json` as wrong credentials: a distinct "invalid shape" reply on a credential field tells a caller which half of which account exists (user enumeration), and a null password must not become a 500. `fieldErrors` applies to every other DTO.

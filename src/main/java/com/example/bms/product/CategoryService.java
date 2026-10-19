@@ -1,5 +1,6 @@
 package com.example.bms.product;
 
+import com.example.bms.shared.PageWindow;
 import com.example.bms.shared.PagedEnvelope;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,9 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CategoryService {
 
-    /** api-design: {@code size ≤ 100} for every collection. */
-    static final int MAX_PAGE_SIZE = 100;
-
     private final CategoryRepository categories;
 
     public CategoryService(CategoryRepository categories) {
@@ -33,15 +31,13 @@ public class CategoryService {
      */
     @Transactional(readOnly = true)
     public PagedEnvelope<CategoryResponse> list(int page, int size) {
-        var safePage = Math.max(page, 0);
-        var safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
-        var items = categories.findAll(safePage, safeSize).stream()
+        var window = PageWindow.of(page, size);
+        var items = categories.findAll(window.page(), window.size()).stream()
                 .map(category -> new CategoryResponse(
                         category.id(), category.name(), category.active()))
                 .toList();
         var total = categories.count();
-        var totalPages = (int) ((total + safeSize - 1) / safeSize);
-        return new PagedEnvelope<>(items, safePage, safeSize, total, totalPages);
+        return window.envelope(items, total);
     }
 
     /**

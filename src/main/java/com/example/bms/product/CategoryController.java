@@ -1,6 +1,8 @@
 package com.example.bms.product;
 
 import com.example.bms.shared.PagedEnvelope;
+import com.example.bms.shared.PageSize;
+import com.example.bms.shared.StatusRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -17,7 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The categories HTTP surface (api-design: CRUD + status). Each verb arrives
- * with the test that pins it — this slice has only the read side.
+ * with the test that pins it — this slice has the read side, create, edit
+ * and status.
  */
 @RestController
 @RequestMapping("/api/categories")
@@ -40,15 +43,11 @@ public class CategoryController {
             String name) {
     }
 
-    /** api-design: the deactivation convention every collection follows. */
-    public record StatusRequest(boolean active) {
-    }
-
     @GetMapping
     public PagedEnvelope<CategoryResponse> list(
             @RequestParam(defaultValue = "0") int page,
-            // Same rule as CategoryService.MAX_PAGE_SIZE: api-design size ≤ 100.
-            @RequestParam(defaultValue = "100") int size) {
+            // api-design size ≤ 100: the default and PageWindow's clamp share PageSize.
+            @RequestParam(defaultValue = PageSize.DEFAULT_PAGE_SIZE) int size) {
         return categories.list(page, size);
     }
 
@@ -66,7 +65,11 @@ public class CategoryController {
         return categories.edit(id, request.name());
     }
 
-    /** 200 with the updated row — same shape as edit, so the UI has one path. */
+    /**
+     * api-design: the deactivation convention every collection follows —
+     * the shared {@link StatusRequest}. 200 with the updated row — same
+     * shape as edit, so the UI has one path.
+     */
     @PutMapping("/{id}/status")
     public CategoryResponse changeStatus(@PathVariable long id,
                                          @RequestBody StatusRequest request) {

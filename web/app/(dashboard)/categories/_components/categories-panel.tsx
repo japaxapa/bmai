@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 import { PagedList } from "@/components/shared/paged-list";
 import {
@@ -12,19 +11,9 @@ import {
   type Category,
 } from "@/features/categories/api";
 import { usePageParam } from "@/hooks/use-page-param";
-import { apiBaseUrl } from "@/lib/api/base-url";
+import { refusalHandlers } from "@/lib/api/refusal";
+import { writeJson } from "@/lib/api/write";
 import { useAuth } from "@/providers/auth-provider";
-
-/** What the API refuses with: RFC 9457, possibly carrying field errors. */
-type Problem = {
-  status?: number;
-  detail?: string;
-  fieldErrors?: Record<string, string[]>;
-};
-
-async function refusalFrom(response: Response): Promise<Problem> {
-  return (await response.json().catch(() => ({}))) as Problem;
-}
 
 // Shape courtesy only (frontend-architecture §Forms): zod gates an empty
 // name before it reaches the API; react-hook-form owns registration, touched
@@ -56,7 +45,7 @@ export function CategoriesPanel() {
   } = useForm<CategoryValues>({ defaultValues: { name: "" } });
 
   const [editing, setEditing] = useState<Category | null>(null);
-  const [conflict, setConflict] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   // The page lives in the URL (usePageParam), and the query key carries it:
   // each page is its own cache entry, and the prefix invalidation below
@@ -64,55 +53,20 @@ export function CategoriesPanel() {
   const { page, goToPage } = usePageParam();
   const { data, error } = useQuery(categoriesQuery(page));
 
-  /**
-   * One place a write refusal lands: field messages on the field they name
-   * (checked first — a 400 carries both a detail sentence and fieldErrors,
-   * and the field's own message is the one that must win), any other
-   * sentence inline (the AC's "never a raw failure"), anything unrecognised
-   * as a toast (frontend-architecture §Forms).
-   */
-  const handleRefusal = (problem?: Problem) => {
-    if (problem?.fieldErrors) {
-      Object.entries(problem.fieldErrors).forEach(([field, messages]) =>
-        setError(field as keyof CategoryValues, { message: messages.join(" ") }),
-      );
-      return;
-    }
-    if (problem?.detail) {
-      setConflict(problem.detail);
-      return;
-    }
-    toast.error("The request was refused");
-  };
-
-  /**
-   * A row action (status flip) has no form to print into, so its refusal
-   * takes the toast channel — frontend-architecture §Forms' fallback for
-   * anything without a field. Writing it into `conflict` instead would show
-   * an unrelated row's failure under the create/rename name field, where it
-   * reads as a name conflict.
-   */
-  const rowActionRefused = (problem?: Problem) => {
-    toast.error(problem?.detail ?? "The request was refused");
-  };
+  // One router for both refusal channels — shared with the products panel
+  // (lib/api/refusal.ts), so the routing rule cannot drift panel-to-panel.
+  const { handleRefusal, rowActionRefused } = refusalHandlers<CategoryValues>({
+    setError,
+    setRefusal,
+  });
 
   const create = useMutation({
-    mutationFn: async (name: string) => {
-      const response = await fetch(`${apiBaseUrl()}/api/categories`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name }),
-      });
-      if (!response.ok) {
-        throw await refusalFrom(response);
-      }
-      return (await response.json()) as Category;
-    },
+    mutationFn: (name: string) =>
+      writeJson<Category>("/api/categories", "POST", { name }),
     // Only the refetch after the write can bring the new row in, so the list
     // must be invalidated — not optimistically patched.
     onSuccess: async () => {
-      setConflict(null);
+      setRefusal(null);
       reset({ name: "" });
       await queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
@@ -120,46 +74,23 @@ export function CategoriesPanel() {
   });
 
   const changeStatus = useMutation({
-    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
-      const response = await fetch(
-        `${apiBaseUrl()}/api/categories/${id}/status`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ active }),
-        },
-      );
-      if (!response.ok) {
-        throw await refusalFrom(response);
-      }
-      return (await response.json()) as Category;
-    },
+    mutationFn: ({ id, active }: { id: number; active: boolean }) =>
+      writeJson<Category>(`/api/categories/${id}/status`, "PUT", { active }),
     onSuccess: async () => {
-      setConflict(null);
+      setRefusal(null);
       await queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
     onError: rowActionRefused,
   });
 
   const rename = useMutation({
-    mutationFn: async ({ id, name }: { id: number; name: string }) => {
-      const response = await fetch(`${apiBaseUrl()}/api/categories/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name }),
-      });
-      if (!response.ok) {
-        throw await refusalFrom(response);
-      }
-      return (await response.json()) as Category;
-    },
+    mutationFn: ({ id, name }: { id: number; name: string }) =>
+      writeJson<Category>(`/api/categories/${id}`, "PUT", { name }),
     // Close the form and refetch: the row's new name comes back from the
     // API, never from what we typed.
     onSuccess: async () => {
       setEditing(null);
-      setConflict(null);
+      setRefusal(null);
       reset({ name: "" });
       await queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
@@ -172,7 +103,7 @@ export function CategoriesPanel() {
       setError("name", { message: parsed.error.issues[0].message });
       return;
     }
-    setConflict(null);
+    setRefusal(null);
     if (editing) {
       rename.mutate({ id: editing.id, name: parsed.data.name });
     } else {
@@ -202,9 +133,12 @@ export function CategoriesPanel() {
               </p>
             )}
           </div>
-          {conflict && (
-            <p role="alert" className="text-sm text-red-600">
-              {conflict}
+          {refusal && (
+            <p
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+            >
+              {refusal}
             </p>
           )}
           <button
@@ -237,7 +171,7 @@ export function CategoriesPanel() {
                       // Seed the open form from the row itself — no second
                       // fetch to fill it in (testing-strategy §4).
                       setEditing(category);
-                      setConflict(null);
+                      setRefusal(null);
                       reset({ name: category.name });
                     }}
                     className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"

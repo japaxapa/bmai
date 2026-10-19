@@ -99,16 +99,18 @@ class CategoryEndToEndTest {
      * <p>The refusal must be an RFC 9457 body with its own sentence — the UI
      * renders {@code detail} inline — and it must come from the constraint, so
      * a second identical POST answers identically whether or not anyone
-     * checked first. Both spellings run through that same path: the exact
-     * repeat, and the same word in another case — typing "HORTIFRUTI" after
-     * "Hortifruti" repeats the vocabulary word, it does not invent a second
-     * one (the functional index on {@code lower(name)}, the choice settled
-     * over a plain {@code UNIQUE}).
+     * checked first. Every spelling runs through that same path: the exact
+     * repeat, the same word in another case ("HORTIFRUTI" after
+     * "Hortifruti"), and the word padded with spaces — the canonical form
+     * (GLOSSARY) trims names on the way in, so none of them can invent a
+     * second vocabulary row.
      */
     @ParameterizedTest
     @CsvSource({
         "Refrigerantes, Refrigerantes",
         "Hortifruti, HORTIFRUTI",
+        // Quoted: the spaces are the payload — CsvSource trims them otherwise.
+        "Suco, ' Suco '",
     })
     void duplicateNameIsRefusedWithProblemJsonByTheRealUniqueIndex(String first, String second) {
         var cookie = adminCookie();

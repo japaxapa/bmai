@@ -31,12 +31,15 @@ A physical good bought and resold. Identified by SKU, has price, cost (weighted 
 _Avoid_: Item, article
 
 **SKU**:
-The unique stock-keeping identifier of a product.
+The unique stock-keeping identifier of a product. Canonical form: trimmed and lowercase — the API stores it that way (like the login email), so `"CAFE-1"`, `"cafe-1"` and `" CAFE-1 "` are one SKU.
 _Avoid_: Code, barcode
 
 **Category**:
-An ADMIN-managed grouping of products. Business data, not code. Name is unique — any casing counts as the same name.
+An ADMIN-managed grouping of products. Business data, not code. Name is unique — any casing counts as the same name; the stored name is trimmed (display keeps the typed casing).
 _Avoid_: Type, tag
+
+**Canonical form**:
+A unique field (SKU, category name) is stored trimmed of surrounding whitespace — and lowercased where the value is an identifier nobody reads as prose (SKU; not category names). Lowercasing is locale-independent (`Locale.ROOT`), never the JVM default: the entity and Postgres `lower()` must compute the same form, or the DB CHECK and the unique index would disagree with the API about what the stored value is. Enforced by the entity and backed by a DB CHECK, so any spelling collapses to one row.
 
 **Price**:
 What the customer pays per unit. Locked onto the order item at CONFIRMED.

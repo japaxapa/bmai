@@ -1,7 +1,5 @@
 package com.example.bms.product;
 
-import com.example.bms.auth.AuthService;
-import com.example.bms.auth.UserRepository;
 import com.example.bms.shared.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,6 +32,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * only. The database boundary is stubbed here; the real unique index and the
  * real filter chain are exercised end to end by {@link CategoryEndToEndTest}.
  *
+ * <p>testing-strategy §2 "cell delegation": this slice's 409 cell (duplicate
+ * name, refused by V3's {@code lower(name)} index) is delegated to that E2E —
+ * a stubbed repository has no index to refuse with — and 401 lives once
+ * repo-wide in {@code AuthEndpointTest}. The per-endpoint cells (400/422/403)
+ * are all here.
+ *
  * <p>The decisions this file pins down, each settled with the user before a
  * line of it was written:
  * <ul>
@@ -57,28 +61,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * repository stubbed there is no unique constraint to collide with, so the
  * slice could only re-state the service's own check — a test that passes by
  * construction. Seam B makes Postgres say no.
+ *
+ * <p>{@code @WebMvcTest} names its controller (as {@code AuthEndpointTest}
+ * does): the slice then wires only what <em>this</em> surface needs, so a
+ * controller a later ticket adds — products was the one that proved it —
+ * costs this file nothing.
  */
-@WebMvcTest
-@Import({SecurityConfig.class, AuthService.class, CategoryService.class})
+@WebMvcTest(controllers = CategoryController.class)
+@Import({SecurityConfig.class, CategoryService.class})
 class CategoryEndpointTest {
 
     @Autowired
     private MockMvc mvc;
-
-    /**
-     * {@code @WebMvcTest} scans controllers only — but it scans <em>all</em> of
-     * them, so AuthController arrives with its service, and the service needs
-     * the database boundary. Stubbed exactly as AuthEndpointTest stubs it;
-     * login is not under test here (it has its own seam), and nobody can pass
-     * through this stub, since it answers "unknown user" to everyone.
-     */
-    @TestConfiguration
-    static class StubbedUsers {
-        @Bean
-        UserRepository userRepository() {
-            return email -> Optional.empty();
-        }
-    }
 
     /**
      * The category database boundary, stubbed the same way: an in-memory
@@ -183,9 +177,9 @@ class CategoryEndpointTest {
     /**
      * business-rules §5: the name is 1–120 chars — the blank half is covered
      * above, this is the cap. Asserting the exact {@code @Size} message proves
-     * the refusal came from the length rule itself: it is the only current
-     * enforcement (the DB CHECK lands with the next schema migration, #41),
-     * and testing-strategy wants every domain rule to have its own test.
+     * the refusal came from the length rule itself (V4's DB CHECK is the
+     * backstop behind it, pinned in {@code FlywayMigrationsTest}), and
+     * testing-strategy wants every domain rule to have its own test.
      */
     @Test
     void overlongNameIsRefusedWithTheCapMessage() throws Exception {
