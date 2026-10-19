@@ -25,7 +25,8 @@ products: CRUD + status + `?search=` (ILIKE on name and sku) + pagination — li
   (409) and canonicalized on write — trimmed + lowercase, and the response echoes the
   canonical form, not the spelling posted (GLOSSARY "Canonical form"); category required —
   unknown categoryId is a 404; price > 0, cost ≥ 0,
-  minimum stock ≥ 0 (422). Supplier link arrives with #7.
+  minimum stock ≥ 0, and money at most two decimal places (422 — the numeric(12,2)
+  column would round a finer value). Supplier link arrives with #7.
 orders:
   GET /api/orders  GET /api/orders/{id}  POST /api/orders
   PUT /api/orders/{id} (draft only)  — no DELETE, ever
@@ -62,7 +63,7 @@ One `@RestControllerAdvice` mapping the `BusinessException` hierarchy to `Proble
 | 401 / 403 | no/bad token / wrong role | employee posts an adjustment |
 | 404 | unknown id | `/orders/999` |
 | 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name |
-| 422 | business rule refuses | cost < 0 |
+| 422 | business rule refuses | cost < 0; price = 0.001 (cents scale) |
 | 500 | unexpected, no stack leak | bug |
 
 Frontend: `fieldErrors` → the field they name; a refusal's `detail` sentence (the 409/422 rows above) → inline where the user was acting; anything else → toast/banner.
