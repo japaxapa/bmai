@@ -1,7 +1,5 @@
 package com.example.bms.product;
 
-import com.example.bms.auth.AuthService;
-import com.example.bms.auth.UserRepository;
 import com.example.bms.shared.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -63,28 +61,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * repository stubbed there is no unique constraint to collide with, so the
  * slice could only re-state the service's own check — a test that passes by
  * construction. Seam B makes Postgres say no.
+ *
+ * <p>{@code @WebMvcTest} names its controller (as {@code AuthEndpointTest}
+ * does): the slice then wires only what <em>this</em> surface needs, so a
+ * controller a later ticket adds — products was the one that proved it —
+ * costs this file nothing.
  */
-@WebMvcTest
-@Import({SecurityConfig.class, AuthService.class, CategoryService.class, ProductService.class})
+@WebMvcTest(controllers = CategoryController.class)
+@Import({SecurityConfig.class, CategoryService.class})
 class CategoryEndpointTest {
 
     @Autowired
     private MockMvc mvc;
-
-    /**
-     * {@code @WebMvcTest} scans controllers only — but it scans <em>all</em> of
-     * them, so AuthController arrives with its service, and the service needs
-     * the database boundary. Stubbed exactly as AuthEndpointTest stubs it;
-     * login is not under test here (it has its own seam), and nobody can pass
-     * through this stub, since it answers "unknown user" to everyone.
-     */
-    @TestConfiguration
-    static class StubbedUsers {
-        @Bean
-        UserRepository userRepository() {
-            return email -> Optional.empty();
-        }
-    }
 
     /**
      * The category database boundary, stubbed the same way: an in-memory
@@ -129,40 +117,6 @@ class CategoryEndpointTest {
         }
 
         private static final AtomicLong ids = new AtomicLong(1);
-    }
-
-    /**
-     * The products boundary arrives with its own ticket (#6) — this slice
-     * only needs the bean to exist, because the all-controllers scan now
-     * instantiates {@code ProductController} too. No behaviour is faked
-     * here; nothing in this file ever calls it.
-     */
-    @TestConfiguration
-    static class StubbedProducts {
-        @Bean
-        ProductRepository productRepository() {
-            return new ProductRepository() {
-                @Override
-                public List<ProductWithCategory> findAll(int page, int size, String search) {
-                    return List.of();
-                }
-
-                @Override
-                public long count(String search) {
-                    return 0;
-                }
-
-                @Override
-                public Optional<ProductWithCategory> findById(long id) {
-                    return Optional.empty();
-                }
-
-                @Override
-                public Product save(Product product) {
-                    return product;
-                }
-            };
-        }
     }
 
     /**

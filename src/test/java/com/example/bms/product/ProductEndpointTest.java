@@ -1,7 +1,5 @@
 package com.example.bms.product;
 
-import com.example.bms.auth.AuthService;
-import com.example.bms.auth.UserRepository;
 import com.example.bms.shared.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,33 +35,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * repo-wide in {@code AuthEndpointTest} (the filter chain doesn't vary per
  * endpoint). The cells that do vary per endpoint — 400/422/403 — are all
  * here.
+ *
+ * <p>{@code @WebMvcTest} names its controller (as {@code AuthEndpointTest}
+ * does): the slice then wires only what <em>this</em> surface needs, so a
+ * controller a later ticket adds costs this file nothing.
  */
-@WebMvcTest
-@Import({SecurityConfig.class, AuthService.class, CategoryService.class, ProductService.class})
+@WebMvcTest(controllers = ProductController.class)
+@Import({SecurityConfig.class, CategoryService.class, ProductService.class})
 class ProductEndpointTest {
 
     @Autowired
     private MockMvc mvc;
 
     /**
-     * {@code @WebMvcTest} scans all controllers, so AuthController arrives
-     * with its service and its database boundary — stubbed exactly as
-     * {@code CategoryEndpointTest} stubs it. Nobody passes through this stub;
-     * login has its own seam.
-     */
-    @TestConfiguration
-    static class StubbedUsers {
-        @Bean
-        UserRepository userRepository() {
-            return email -> Optional.empty();
-        }
-    }
-
-    /**
-     * The categories boundary, needed by the all-controllers scan and — once
-     * the create path lands — by the service itself: a product's category
-     * name is resolved here, and the known row (id 7) is the one the create
-     * test links to.
+     * The categories boundary, needed by the service itself: a product's
+     * category name is resolved here, and the known row (id 7) is the one
+     * the create test links to.
      */
     @TestConfiguration
     static class StubbedCategories {
