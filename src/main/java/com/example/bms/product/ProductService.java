@@ -64,16 +64,15 @@ public class ProductService {
      */
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @Transactional
-    public ProductResponse create(String sku, String name, String description,
-                                  BigDecimal price, BigDecimal cost,
-                                  Integer minimumStock, Long categoryId) {
-        var category = categories.findById(categoryId)
-                .orElseThrow(() -> new CategoryNotFoundException(categoryId));
+    public ProductResponse create(ProductRequest request) {
+        var category = categories.findById(request.categoryId())
+                .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
         var stored = store(new Product(
-                0, sku, name, description, price,
-                cost == null ? BigDecimal.ZERO : cost,
-                minimumStock == null ? 0 : minimumStock,
-                0, categoryId, true));
+                0, request.sku(), request.name(), request.description(),
+                request.price(),
+                request.cost() == null ? BigDecimal.ZERO : request.cost(),
+                request.minimumStock() == null ? 0 : request.minimumStock(),
+                0, request.categoryId(), true));
         return responseOf(new ProductWithCategory(stored, category.name()));
     }
 
@@ -100,19 +99,18 @@ public class ProductService {
      */
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @Transactional
-    public ProductResponse edit(long id, String sku, String name, String description,
-                                BigDecimal price, BigDecimal cost,
-                                Integer minimumStock, Long categoryId) {
+    public ProductResponse edit(long id, ProductRequest request) {
         var existing = products.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException(id));
-        var category = categories.findById(categoryId)
-                .orElseThrow(() -> new CategoryNotFoundException(categoryId));
+        var category = categories.findById(request.categoryId())
+                .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
         var current = existing.product();
         var stored = store(new Product(
-                current.id(), sku, name, description, price,
-                cost == null ? BigDecimal.ZERO : cost,
-                minimumStock == null ? 0 : minimumStock,
-                current.stock(), categoryId, current.active()));
+                current.id(), request.sku(), request.name(), request.description(),
+                request.price(),
+                request.cost() == null ? BigDecimal.ZERO : request.cost(),
+                request.minimumStock() == null ? 0 : request.minimumStock(),
+                current.stock(), request.categoryId(), current.active()));
         return responseOf(new ProductWithCategory(stored, category.name()));
     }
 
