@@ -2,6 +2,7 @@ package com.example.bms.product;
 
 import com.example.bms.shared.PagedEnvelope;
 import com.example.bms.shared.PageSize;
+import com.example.bms.shared.StatusRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,11 +47,11 @@ public class ProductController {
         return products.edit(id, request);
     }
 
-    /** The deactivation convention (api-design), same shape as every resource. */
-    public record StatusRequest(boolean active) {
-    }
-
-    /** 200 with the updated row — same shape as edit, so the UI has one path. */
+    /**
+     * api-design: the deactivation convention every collection follows —
+     * the shared {@link StatusRequest}. 200 with the updated row — same
+     * shape as edit, so the UI has one path.
+     */
     @PutMapping("/{id}/status")
     public ProductResponse changeStatus(@PathVariable long id,
                                         @RequestBody StatusRequest request) {
