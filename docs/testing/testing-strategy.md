@@ -8,7 +8,7 @@ JUnit 5 + AssertJ. Every order transition legal + illegal; cancel-vs-return spli
 
 ## 2. Slices (`@WebMvcTest`)
 
-DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + status (409/422 split); 401/403 paths.
+DTO shape → 400 + `fieldErrors`; domain exceptions → problem+json shape + status (409/422 split); 403 paths (401 and the DB-backed 409 are delegated — see Cell delegation below).
 
 **Cell delegation** — where a cell lives when this seam can't raise it (say so in the slice's javadoc when delegating, so an audit of the checklist above doesn't read as a gap):
 

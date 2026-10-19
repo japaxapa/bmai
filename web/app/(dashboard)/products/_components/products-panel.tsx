@@ -23,13 +23,26 @@ import { useAuth } from "@/providers/auth-provider";
 // state and where the messages land. No caps or ranges here — the server owns
 // them (price > 0, cost ≥ 0, minimum stock ≥ 0 — the 422s), and its messages
 // are the ones the fields must show.
-const productSchema = z.object({
+//
+// The optional-number rule is shape, not range: a filled box must survive
+// Number(). "1e999" is a *valid* type=number value (the spec allows
+// exponents) that Number() turns into Infinity — JSON serializes that as
+// null, and a null cost/minimum stock is the server's born-zero default: the
+// number the user typed would silently become 0 instead of being refused.
+const optionalNumber = (label: string) =>
+  z
+    .string()
+    .refine((value) => value.trim() === "" || Number.isFinite(Number(value)), {
+      message: `${label} must be a number.`,
+    });
+
+export const productSchema = z.object({
   sku: z.string().min(1, "SKU is required."),
   name: z.string().min(1, "Name is required."),
   description: z.string(),
   price: z.string().min(1, "Price is required."),
-  cost: z.string(),
-  minimumStock: z.string(),
+  cost: optionalNumber("Cost"),
+  minimumStock: optionalNumber("Minimum stock"),
   categoryId: z.string().min(1, "A category is required."),
 });
 
@@ -256,9 +269,15 @@ export function ProductsPanel() {
               type="number"
               step="0.01"
               min="0"
+              aria-invalid={Boolean(errors.cost)}
               className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
               {...register("cost")}
             />
+            {errors.cost && (
+              <p role="alert" className="text-sm text-red-600">
+                {errors.cost.message}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -269,9 +288,15 @@ export function ProductsPanel() {
               id="product-minimum-stock"
               type="number"
               min="0"
+              aria-invalid={Boolean(errors.minimumStock)}
               className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
               {...register("minimumStock")}
             />
+            {errors.minimumStock && (
+              <p role="alert" className="text-sm text-red-600">
+                {errors.minimumStock.message}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">

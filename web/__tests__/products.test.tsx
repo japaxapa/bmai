@@ -6,7 +6,7 @@ import { server } from "@/test/server";
 import { makeEnvelope } from "@/test/envelope";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { AppProviders } from "@/providers";
-import { ProductsPanel } from "@/app/(dashboard)/products/_components/products-panel";
+import { ProductsPanel, productSchema } from "@/app/(dashboard)/products/_components/products-panel";
 import { Toaster } from "@/components/ui/sonner";
 
 // jsdom never mounts the app router, so anything calling useRouter() /
@@ -281,6 +281,37 @@ describe("products panel", () => {
       "Price must be greater than zero.",
     );
     expect(screen.getByLabelText("Price")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  test("refuses a filled box that Number() would turn into a silent zero", () => {
+    // The exact seam the submit path runs (products-panel: safeParse before
+    // toBody). jsdom's number input refuses a non-finite value outright, so
+    // this is pinned at the schema rather than through the DOM — in a real
+    // browser "1e999" *is* a valid type=number value (exponents are legal
+    // floating-point syntax), Number() reads it as Infinity, JSON serializes
+    // that as null, and a null cost is the server's born-zero default: the
+    // typed number would silently become 0 instead of being refused.
+    const values = {
+      sku: "HUGE-1",
+      name: "Preço absurdo",
+      description: "",
+      price: "9.90",
+      cost: "1e999",
+      minimumStock: "",
+      categoryId: "1",
+    };
+    const parsed = productSchema.safeParse(values);
+
+    expect(parsed.success).toBe(false);
+    expect(!parsed.success && parsed.error.issues[0]).toMatchObject({
+      path: ["cost"],
+      message: "Cost must be a number.",
+    });
+
+    // The empty box stays legal — born-zero is the documented default for an
+    // omitted cost, and only a *filled* box must survive Number().
+    expect(productSchema.safeParse({ ...values, cost: "" }).success).toBe(true);
+    expect(productSchema.safeParse({ ...values, cost: "12.5" }).success).toBe(true);
   });
 
   test("hides the write controls from a signed-in employee", async () => {
