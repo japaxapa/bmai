@@ -32,7 +32,7 @@ public class ProductController {
     @GetMapping
     public PagedEnvelope<ProductResponse> list(
             @RequestParam(defaultValue = "0") int page,
-            // api-design size ≤ 100: the default and the services' clamp share PageSize.
+            // api-design size ≤ 100: the default and PageWindow's clamp share PageSize.
             @RequestParam(defaultValue = PageSize.DEFAULT_PAGE_SIZE) int size,
             // api-design: ILIKE over name and sku; blank (or absent) = no filter.
             @RequestParam(defaultValue = "") String search) {

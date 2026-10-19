@@ -1,7 +1,7 @@
 package com.example.bms.product;
 
+import com.example.bms.shared.PageWindow;
 import com.example.bms.shared.PagedEnvelope;
-import com.example.bms.shared.PageSize;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -38,14 +38,12 @@ public class ProductService {
      */
     @Transactional(readOnly = true)
     public PagedEnvelope<ProductResponse> list(int page, int size, String search) {
-        var safePage = Math.max(page, 0);
-        var safeSize = Math.clamp(size, 1, PageSize.MAX_PAGE_SIZE);
-        var items = products.findAll(safePage, safeSize, search).stream()
+        var window = PageWindow.of(page, size);
+        var items = products.findAll(window.page(), window.size(), search).stream()
                 .map(ProductService::responseOf)
                 .toList();
         var total = products.count(search);
-        var totalPages = (int) ((total + safeSize - 1) / safeSize);
-        return new PagedEnvelope<>(items, safePage, safeSize, total, totalPages);
+        return window.envelope(items, total);
     }
 
     /**
@@ -67,12 +65,7 @@ public class ProductService {
     public ProductResponse create(ProductRequest request) {
         var category = categories.findById(request.categoryId())
                 .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
-        var stored = store(new Product(
-                0, request.sku(), request.name(), request.description(),
-                request.price(),
-                request.cost() == null ? BigDecimal.ZERO : request.cost(),
-                request.minimumStock() == null ? 0 : request.minimumStock(),
-                0, request.categoryId(), true));
+        var stored = store(build(request, 0, 0, true));
         return responseOf(new ProductWithCategory(stored, category.name()));
     }
 
@@ -92,6 +85,23 @@ public class ProductService {
     }
 
     /**
+     * The one place a request becomes a row. Create and edit differ in
+     * exactly three slots, which the caller supplies: the identity (0 on
+     * insert, the loaded id on edit), the stock mirror (born zero — forms
+     * never write it, ADR 0006) and the status (born active). The null
+     * cost/minimum stock are the "born zero" defaults {@link Product}'s
+     * constructor documents but cannot fill in itself.
+     */
+    private static Product build(ProductRequest request, long id, int stock, boolean active) {
+        return new Product(
+                id, request.sku(), request.name(), request.description(),
+                request.price(),
+                request.cost() == null ? BigDecimal.ZERO : request.cost(),
+                request.minimumStock() == null ? 0 : request.minimumStock(),
+                stock, request.categoryId(), active);
+    }
+
+    /**
      * Edit: load, refuse the unknown id as a 404, rebuild the row keeping
      * the fields no form writes — {@code stock} (ADR 0006: movements only)
      * and the id. The whole shape is required, so an edit cannot silently
@@ -105,12 +115,7 @@ public class ProductService {
         var category = categories.findById(request.categoryId())
                 .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
         var current = existing.product();
-        var stored = store(new Product(
-                current.id(), request.sku(), request.name(), request.description(),
-                request.price(),
-                request.cost() == null ? BigDecimal.ZERO : request.cost(),
-                request.minimumStock() == null ? 0 : request.minimumStock(),
-                current.stock(), request.categoryId(), current.active()));
+        var stored = store(build(request, current.id(), current.stock(), current.active()));
         return responseOf(new ProductWithCategory(stored, category.name()));
     }
 
