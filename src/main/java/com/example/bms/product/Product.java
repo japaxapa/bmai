@@ -1,6 +1,7 @@
 package com.example.bms.product;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 
 /**
  * A product row (GLOSSARY Product): a physical good we buy and resell,
@@ -44,11 +45,15 @@ public record Product(
      * <p>The SKU is <em>canonicalized</em>, not guarded (GLOSSARY "Canonical
      * form"): trimmed and lowercased, so the unique index compares one
      * spelling per identifier — "CAFE-1", "cafe-1" and " CAFE-1 " are the
-     * same SKU here, exactly as the index sees them. The name is trimmed
+     * same SKU here, exactly as the index sees them. Lowercasing is
+     * {@link java.util.Locale#ROOT} on purpose: the no-arg form reads the
+     * JVM default locale, which under tr-TR turns "I" into a dotless ı —
+     * and V5's CHECK plus the lower(sku) index would then disagree with
+     * the entity about what the stored SKU even is. The name is trimmed
      * only: it is display data, and "Padaria" must stay "Padaria".
      */
     public Product {
-        sku = sku.trim().toLowerCase();
+        sku = sku.trim().toLowerCase(Locale.ROOT);
         name = name.trim();
         if (price.signum() <= 0) {
             throw new InvalidProductException("Price must be greater than zero.");

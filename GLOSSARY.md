@@ -39,7 +39,7 @@ An ADMIN-managed grouping of products. Business data, not code. Name is unique �
 _Avoid_: Type, tag
 
 **Canonical form**:
-A unique field (SKU, category name, login email) is stored trimmed of surrounding whitespace — and lowercased where the value is an identifier nobody reads as prose (SKU, email; not category names). Enforced by the entity and backed by a DB CHECK, so any spelling collapses to one row.
+A unique field (SKU, category name, login email) is stored trimmed of surrounding whitespace — and lowercased where the value is an identifier nobody reads as prose (SKU, email; not category names). Lowercasing is locale-independent (`Locale.ROOT`), never the JVM default: the entity and Postgres `lower()` must compute the same form, or the DB CHECK and the unique index would disagree with the API about what the stored value is. Enforced by the entity and backed by a DB CHECK, so any spelling collapses to one row.
 
 **Price**:
 What the customer pays per unit. Locked onto the order item at CONFIRMED.

@@ -23,6 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -165,6 +166,39 @@ class ProductEndToEndTest {
         assertThat(field(duplicate.getBody(), "$.detail"))
                 .as("the UI prints this sentence inline, so it cannot be blank")
                 .isNotNull();
+    }
+
+    /**
+     * Canonical form must be the same function on both sides of the fence:
+     * the entity lowercases with {@code Locale.ROOT}, Postgres lower()s with
+     * the database collation, and V5's CHECK plus the {@code lower(sku)}
+     * index compare the two. This SKU carries the hazards — surrounding
+     * padding, an accented letter, and the ASCII "I" a tr-TR JVM would fold
+     * into a dotless ı (the classic no-arg {@code toLowerCase()} trap). The
+     * stored form must equal the database's own lower() of the posted
+     * spelling, and a differently-cased repeat must still collide on the
+     * index: entity and database agreeing *is* the "one SKU" promise.
+     */
+    @Test
+    void canonicalSkuAgreesWithTheDatabasesOwnLower() {
+        var cookie = adminCookie();
+        var categoryId = createCategoryNamed(uniqueName("Padaria"), cookie);
+        var posted = "  Café-I-" + sequence.incrementAndGet() + "  ";
+
+        var created = post("/api/products", newProduct(posted, categoryId), cookie);
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+
+        var stored = (String) field(created.getBody(), "$.sku");
+        var databaseSays = jdbc.queryForObject("select lower(btrim(?))", String.class, posted);
+        assertThat(stored)
+                .as("entity canonical form == the database's own lower() of the posted SKU")
+                .isEqualTo(databaseSays);
+
+        var duplicate = post("/api/products",
+                newProduct(posted.toUpperCase(Locale.ROOT), categoryId), cookie);
+        assertThat(duplicate.getStatusCode().value())
+                .as("the index's lower() and the entity's canonical form see one SKU")
+                .isEqualTo(409);
     }
 
     /**
