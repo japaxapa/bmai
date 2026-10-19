@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 import { PagedList } from "@/components/shared/paged-list";
 import { categoriesQuery } from "@/features/categories/api";
@@ -15,7 +14,8 @@ import {
 } from "@/features/products/api";
 import { usePageParam } from "@/hooks/use-page-param";
 import { useSearchParam } from "@/hooks/use-search-param";
-import { writeJson, type Problem } from "@/lib/api/write";
+import { refusalHandlers } from "@/lib/api/refusal";
+import { writeJson } from "@/lib/api/write";
 import { useAuth } from "@/providers/auth-provider";
 
 // Shape courtesy only (frontend-architecture §Forms): zod gates the empty
@@ -102,37 +102,12 @@ export function ProductsPanel() {
   // to every signed-in role precisely so this dropdown is never empty).
   const { data: categories } = useQuery(categoriesQuery(0));
 
-  /**
-   * One place a write refusal lands: field messages on the field they name
-   * (checked first — a 400 carries both a detail sentence and fieldErrors,
-   * and the field's own message is the one that must win), any other
-   * sentence inline (the AC's "never a raw failure"), anything unrecognised
-   * as a toast (frontend-architecture §Forms).
-   */
-  const handleRefusal = (problem?: Problem) => {
-    if (problem?.fieldErrors) {
-      Object.entries(problem.fieldErrors).forEach(([field, messages]) =>
-        setError(field as keyof ProductValues, { message: messages.join(" ") }),
-      );
-      return;
-    }
-    if (problem?.detail) {
-      setRefusal(problem.detail);
-      return;
-    }
-    toast.error("The request was refused");
-  };
-
-  /**
-   * A row action (status flip) has no form to print into, so its refusal
-   * takes the toast channel — frontend-architecture §Forms' fallback for
-   * anything without a field. Writing it into `refusal` instead would show
-   * an unrelated row's failure under the create form, where a reader would
-   * take it for the duplicate-SKU conflict the form's own refusals carry.
-   */
-  const rowActionRefused = (problem?: Problem) => {
-    toast.error(problem?.detail ?? "The request was refused");
-  };
+  // One router for both refusal channels — shared with the categories panel
+  // (lib/api/refusal.ts), so the routing rule cannot drift panel-to-panel.
+  const { handleRefusal, rowActionRefused } = refusalHandlers<ProductValues>({
+    setError,
+    setRefusal,
+  });
 
   const changeStatus = useMutation({
     mutationFn: ({ id, active }: { id: number; active: boolean }) =>
