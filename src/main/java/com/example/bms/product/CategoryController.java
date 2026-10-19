@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The categories HTTP surface (api-design: CRUD + status). Each verb arrives
- * with the test that pins it — this slice has only the read side.
+ * with the test that pins it — this slice has the read side, create, edit
+ * and status.
  */
 @RestController
 @RequestMapping("/api/categories")
