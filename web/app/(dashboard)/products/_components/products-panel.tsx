@@ -12,8 +12,10 @@ import {
   type Product,
   type ProductBody,
 } from "@/features/products/api";
+import { suppliersQuery } from "@/features/suppliers/api";
 import { usePageParam } from "@/hooks/use-page-param";
 import { useSearchParam } from "@/hooks/use-search-param";
+import { optionalNumber } from "@/lib/forms/optional-number";
 import { refusalHandlers } from "@/lib/api/refusal";
 import { writeJson } from "@/lib/api/write";
 import { useAuth } from "@/providers/auth-provider";
@@ -24,18 +26,12 @@ import { useAuth } from "@/providers/auth-provider";
 // them (price > 0, cost ≥ 0, minimum stock ≥ 0 — the 422s), and its messages
 // are the ones the fields must show.
 //
-// The optional-number rule is shape, not range: a filled box must survive
-// Number(). "1e999" is a *valid* type=number value (the spec allows
-// exponents) that Number() turns into Infinity — JSON serializes that as
-// null, and a null cost/minimum stock is the server's born-zero default: the
-// number the user typed would silently become 0 instead of being refused.
-const optionalNumber = (label: string) =>
-  z
-    .string()
-    .refine((value) => value.trim() === "" || Number.isFinite(Number(value)), {
-      message: `${label} must be a number.`,
-    });
-
+// The optional-number rule (shared with the suppliers panel, lib/forms) is
+// shape, not range: a filled box must survive Number(). "1e999" is a
+// *valid* type=number value (the spec allows exponents) that Number() turns
+// into Infinity — JSON serializes that as null, and a null cost/minimum
+// stock is the server's born-zero default: the number the user typed would
+// silently become 0 instead of being refused.
 export const productSchema = z.object({
   sku: z.string().min(1, "SKU is required."),
   name: z.string().min(1, "Name is required."),
@@ -44,6 +40,10 @@ export const productSchema = z.object({
   cost: optionalNumber("Cost"),
   minimumStock: optionalNumber("Minimum stock"),
   categoryId: z.string().min(1, "A category is required."),
+  // The supplier link is optional (ticket #7): a product may be listed
+  // before anyone has decided who supplies it, and the empty box is what
+  // keeps the id out of the body.
+  supplierId: z.string(),
 });
 
 type ProductValues = z.infer<typeof productSchema>;
@@ -56,6 +56,7 @@ const EMPTY: ProductValues = {
   cost: "",
   minimumStock: "",
   categoryId: "",
+  supplierId: "",
 };
 
 /** Form strings → the DTO's numbers; an empty optional box simply stays out. */
@@ -70,6 +71,9 @@ function toBody(values: ProductValues): ProductBody {
       ? {}
       : { minimumStock: Number(values.minimumStock) }),
     categoryId: Number(values.categoryId),
+    ...(values.supplierId.trim() === ""
+      ? {}
+      : { supplierId: Number(values.supplierId) }),
   };
 }
 
@@ -111,9 +115,10 @@ export function ProductsPanel() {
     return () => clearTimeout(timer);
   }, [term, search, setSearch]);
   const { data, error } = useQuery(productsQuery(page, search));
-  // The category dropdown (business-rules §4: reading the vocabulary is open
-  // to every signed-in role precisely so this dropdown is never empty).
+  // The two dropdowns' vocabularies (business-rules §4: reading them is open
+  // to every signed-in role precisely so neither dropdown is ever empty).
   const { data: categories } = useQuery(categoriesQuery(0));
+  const { data: suppliers } = useQuery(suppliersQuery(0, ""));
 
   // One router for both refusal channels — shared with the categories panel
   // (lib/api/refusal.ts), so the routing rule cannot drift panel-to-panel.
@@ -323,6 +328,27 @@ export function ProductsPanel() {
             )}
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-supplier" className="text-sm font-medium">
+              Supplier
+            </label>
+            {/* The one optional link on the form: "No supplier" is the empty
+                value, which `toBody` leaves out of the body — the server
+                stores null, never a made-up id. */}
+            <select
+              id="product-supplier"
+              className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
+              {...register("supplierId")}
+            >
+              <option value="">No supplier</option>
+              {suppliers?.items.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {refusal && (
             <p
               role="alert"
@@ -355,6 +381,11 @@ export function ProductsPanel() {
               <span className="w-28 truncate text-sm text-neutral-500">
                 {product.categoryName}
               </span>
+              {/* The supplier the product names, resolved by the API (a LEFT
+                  join — a product with none still appears, marked "—"). */}
+              <span className="w-40 truncate text-sm text-neutral-500">
+                {product.supplierName ?? "—"}
+              </span>
               {/* GLOSSARY "Deactivated": retired rows stay, marked — never gone. */}
               <span className="w-24 text-sm text-neutral-500">
                 {product.active ? "Active" : "Deactivated"}
@@ -377,6 +408,7 @@ export function ProductsPanel() {
                         cost: String(product.cost),
                         minimumStock: String(product.minimumStock),
                         categoryId: String(product.categoryId),
+                        supplierId: String(product.supplierId ?? ""),
                       });
                     }}
                     className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"

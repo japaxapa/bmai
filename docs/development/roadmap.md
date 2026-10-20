@@ -8,7 +8,7 @@ Repo layout, compose (db), Flyway, Security+JWT, Next+shadcn+3 providers, middle
 
 ## Phase 1 — Catalog
 
-Categories, products, suppliers CRUD + status + constraints. **Done:** unique violations surface as 422/409 through the UI.
+Categories, products, suppliers CRUD + status + constraints. **Done:** unique violations surface as 422/409 through the UI; the product form links an optional supplier (V6), and the supplier's CPF/CNPJ is canonical digits with its check digits judged by the domain.
 
 ## Phase 2 — Orders + Inventory ⭐
 

@@ -59,6 +59,10 @@ The seeded admin also manages the product vocabulary on `/categories` — create
 
 ![Categories: create form, three rows, one marked Deactivated, with Edit/Deactivate/Reactivate controls](assets/categories.png)
 
+Suppliers live on `/suppliers`, readable by every signed-in role (the product form's supplier dropdown reads the same list) and writable by ADMIN/MANAGER. A document is a CPF or a CNPJ: the box masks it as you type, the API stores the digits only, and one party holds one document — a repeat is refused with the sentence rendered inline, never a raw failure. Payment terms default to 30 when the box is left empty, and a switched-off supplier stays in the list, marked:
+
+![Suppliers: create form mid-fill with the CPF/CNPJ mask applied and the duplicate-document 409 rendered inline; three rows, one marked Deactivated](assets/suppliers.png)
+
 The UI talks straight to the API (no BFF), so it needs the API base URL when it isn't the `:8081` default: `NEXT_PUBLIC_API_BASE_URL` (inlined into the browser bundle at build time — the only callers are client components). E.g. with the backend on `:8090`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8090 npm run dev --workspace web`. CORS allows exactly `http://localhost:3000` with credentials (ADR 0015).
 
 ### Run the e2e suite (Playwright)

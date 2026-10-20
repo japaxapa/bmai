@@ -1,6 +1,8 @@
 package com.example.bms.product;
 
 import com.example.bms.shared.SecurityConfig;
+import com.example.bms.supplier.Supplier;
+import com.example.bms.supplier.SupplierRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -94,14 +96,14 @@ class ProductEndpointTest {
             var cafe = new Product(
                     7, "CAFE-1", "Café 500g", "Torra média",
                     new BigDecimal("24.90"), new BigDecimal("15.00"),
-                    10, 42, 3, true);
+                    10, 42, 3, 7L, true);
             var trigo = new Product(
                     8, "TRIGO-2", "Trigo 1kg", null,
                     new BigDecimal("5.50"), new BigDecimal("3.20"),
-                    0, 120, 3, true);
+                    0, 120, 3, null, true);
             List<ProductWithCategory> rows = List.of(
-                    new ProductWithCategory(cafe, "Padaria"),
-                    new ProductWithCategory(trigo, "Padaria"));
+                    new ProductWithCategory(cafe, "Padaria", "Café Bom LTDA"),
+                    new ProductWithCategory(trigo, "Padaria", null));
             return new ProductRepository() {
                 @Override
                 public List<ProductWithCategory> findAll(int page, int size, String search) {
@@ -135,6 +137,43 @@ class ProductEndpointTest {
                 @Override
                 public Product save(Product product) {
                     return product;
+                }
+            };
+        }
+    }
+
+    /**
+     * The suppliers boundary, wired because the product create now resolves
+     * a supplier name. The known row (id 7) is the one the supplier tests
+     * link to; the repository is never asked for a list by this slice.
+     */
+    @TestConfiguration
+    static class StubbedSuppliers {
+        @Bean
+        SupplierRepository supplierRepository() {
+            return new SupplierRepository() {
+                @Override
+                public List<Supplier> findAll(int page, int size, String search) {
+                    return List.of(new Supplier(7, "Café Bom LTDA", "11222333000181",
+                            "contato@cafebom.com.br", 30, true));
+                }
+
+                @Override
+                public long count(String search) {
+                    return 1;
+                }
+
+                @Override
+                public Optional<Supplier> findById(long id) {
+                    return java.util.Optional.ofNullable(id == 7
+                            ? new Supplier(7, "Café Bom LTDA", "11222333000181",
+                                    "contato@cafebom.com.br", 30, true)
+                            : null);
+                }
+
+                @Override
+                public Supplier save(Supplier supplier) {
+                    return supplier.id() == 0 ? supplier.withId(9) : supplier;
                 }
             };
         }
@@ -428,6 +467,62 @@ class ProductEndpointTest {
         mvc.perform(post("/api/products").with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sku\":\"X-1\",\"name\":\"Órfão\",\"price\":1,\"categoryId\":999}"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    /**
+     * Ticket 7's other half: a product names its supplier, and the link
+     * travels back the same way the category one does — id for the edit
+     * form, name for the row — so neither the UI nor the API needs a second
+     * request to join them.
+     */
+    @Test
+    void adminCreateAcceptsASupplierAndAnswersItAsIdAndName() throws Exception {
+        mvc.perform(post("/api/products").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sku":"CAFE-SUP","name":"Café do fornecedor","price":24.90,
+                                 "categoryId":7,"supplierId":7}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.supplierId").value(7))
+                .andExpect(jsonPath("$.supplierName").value("Café Bom LTDA"));
+    }
+
+    /**
+     * The link is optional (V6: nullable column) — a product may be listed
+     * before anyone has decided who supplies it. "No supplier" is expressed
+     * as an absent id, not as a sentinel number the UI would have to know
+     * to filter out; the name is null for the same reason.
+     */
+    @Test
+    void aProductWithNoSupplierAnswersAbsentFields() throws Exception {
+        mvc.perform(post("/api/products").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sku":"CAFE-SEM","name":"Sem fornecedor ainda","price":24.90,
+                                 "categoryId":7}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.supplierId").doesNotExist())
+                .andExpect(jsonPath("$.supplierName").doesNotExist());
+    }
+
+    /**
+     * api-design errors table: "404 | unknown id". The supplier link is a
+     * real reference, so an unknown id is the same 404 the category gets —
+     * not a foreign-key 500 leaking the SQL to the caller.
+     */
+    @Test
+    void unknownSupplierOnCreateIsA404ProblemJson() throws Exception {
+        mvc.perform(post("/api/products").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sku":"X-2","name":"Fornecedor órfão","price":1,
+                                 "categoryId":7,"supplierId":999}
+                                """))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(404));

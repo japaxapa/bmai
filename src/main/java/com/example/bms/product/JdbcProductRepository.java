@@ -18,7 +18,7 @@ public class JdbcProductRepository implements ProductRepository {
     /** The column set every read names, in one place — never drifts. */
     private static final String COLUMNS =
             "p.id, p.sku, p.name, p.description, p.price, p.cost, "
-                    + "p.minimum_stock, p.stock, p.category_id, p.active";
+                    + "p.minimum_stock, p.stock, p.category_id, p.supplier_id, p.active";
 
     /**
      * The live-search predicate, in one place — {@link #findAll} and
@@ -32,7 +32,11 @@ public class JdbcProductRepository implements ProductRepository {
     private static final String SEARCH_PREDICATE =
             "p.sku ilike ? escape '\\' or p.name ilike ? escape '\\'";
 
-    /** One mapping, used by every read: the join's category name rides along. */
+    /**
+     * One mapping, used by every read: the join's category name rides along,
+     * and the supplier's does too (left join — a product may have none, and
+     * an inner join would simply make it invisible in the list).
+     */
     private static final RowMapper<ProductWithCategory> PRODUCT_ROW = (rs, rowNum) ->
             new ProductWithCategory(
                     new Product(
@@ -45,8 +49,10 @@ public class JdbcProductRepository implements ProductRepository {
                             rs.getInt("minimum_stock"),
                             rs.getInt("stock"),
                             rs.getLong("category_id"),
+                            (Long) rs.getObject("supplier_id"),
                             rs.getBoolean("active")),
-                    rs.getString("category_name"));
+                    rs.getString("category_name"),
+                    rs.getString("supplier_name"));
 
     private final JdbcTemplate jdbc;
 
@@ -59,8 +65,10 @@ public class JdbcProductRepository implements ProductRepository {
         var term = likeTerm(search);
         // lower(p.sku) in ORDER BY matches the V4 index's notion of a SKU,
         // so the list orders the same way uniqueness compares.
-        var sql = "select " + COLUMNS + ", c.name as category_name "
-                + "from products p join categories c on c.id = p.category_id "
+        var sql = "select " + COLUMNS + ", c.name as category_name, s.name as supplier_name "
+                + "from products p "
+                + "join categories c on c.id = p.category_id "
+                + "left join suppliers s on s.id = p.supplier_id "
                 + (term == null
                         ? ""
                         : "where " + SEARCH_PREDICATE + " ")
@@ -87,8 +95,10 @@ public class JdbcProductRepository implements ProductRepository {
     @Override
     public Optional<ProductWithCategory> findById(long id) {
         return jdbc.query(
-                        "select " + COLUMNS + ", c.name as category_name "
-                                + "from products p join categories c on c.id = p.category_id "
+                        "select " + COLUMNS + ", c.name as category_name, s.name as supplier_name "
+                                + "from products p "
+                                + "join categories c on c.id = p.category_id "
+                                + "left join suppliers s on s.id = p.supplier_id "
                                 + "where p.id = ?",
                         PRODUCT_ROW, id)
                 .stream().findFirst();
@@ -104,20 +114,23 @@ public class JdbcProductRepository implements ProductRepository {
         if (product.id() == 0) {
             var id = jdbc.queryForObject(
                     "insert into products (sku, name, description, price, cost, "
-                            + "minimum_stock, stock, category_id, active) "
-                            + "values (?, ?, ?, ?, ?, ?, ?, ?, ?) returning id",
+                            + "minimum_stock, stock, category_id, supplier_id, active) "
+                            + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id",
                     Long.class,
                     product.sku(), product.name(), product.description(),
                     product.price(), product.cost(), product.minimumStock(),
-                    product.stock(), product.categoryId(), product.active());
+                    product.stock(), product.categoryId(), product.supplierId(),
+                    product.active());
             return product.withId(id);
         }
         jdbc.update(
                 "update products set sku = ?, name = ?, description = ?, price = ?, cost = ?, "
-                        + "minimum_stock = ?, stock = ?, category_id = ?, active = ? where id = ?",
+                        + "minimum_stock = ?, stock = ?, category_id = ?, supplier_id = ?, active = ? "
+                        + "where id = ?",
                 product.sku(), product.name(), product.description(),
                 product.price(), product.cost(), product.minimumStock(),
-                product.stock(), product.categoryId(), product.active(), product.id());
+                product.stock(), product.categoryId(), product.supplierId(),
+                product.active(), product.id());
         return product;
     }
 

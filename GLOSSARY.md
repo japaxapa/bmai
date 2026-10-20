@@ -9,8 +9,12 @@ A business that buys products on credit.
 _Avoid_: Client, buyer, account
 
 **Supplier**:
-A business that sells products to us for resale.
+A business that sells products to us for resale. Identified by a CPF/CNPJ-style document — one party, one document, so two rows may never hold the same one. A product names one, or none yet (the link is optional, and retiring a supplier is a status flip: GLOSSARY "Deactivated").
 _Avoid_: Vendor
+
+**Document**:
+A party's CPF/CNPJ-style identity. Canonical form: digits only (see below); 11 digits is a CPF, 14 a CNPJ, and the last digits of either are verification digits the domain checks. Contact info (`email`) is deliberately *not* identity — it is optional and never unique.
+_Avoid_: Tax ID (fine in prose, not in the model), fiscal number
 
 **User**:
 A person who logs in. Has a role and can be deactivated, never deleted.
@@ -39,7 +43,7 @@ An ADMIN-managed grouping of products. Business data, not code. Name is unique �
 _Avoid_: Type, tag
 
 **Canonical form**:
-A unique field (SKU, category name) is stored trimmed of surrounding whitespace — and lowercased where the value is an identifier nobody reads as prose (SKU; not category names). Lowercasing is locale-independent (`Locale.ROOT`), never the JVM default: the entity and Postgres `lower()` must compute the same form, or the DB CHECK and the unique index would disagree with the API about what the stored value is. Enforced by the entity and backed by a DB CHECK, so any spelling collapses to one row.
+A unique field (SKU, category name, document) is stored trimmed of surrounding whitespace — lowercased where the value is an identifier nobody reads as prose (SKU; not category names, and not documents, which have no letters to begin with), and stripped to **digits only** where the readable spelling is a digit string with punctuation (a CPF/CNPJ document: `11.222.333/0001-81` and `11222333000181` are one party, and the unique index only ever sees the second). Lowercasing is locale-independent (`Locale.ROOT`), never the JVM default: the entity and Postgres `lower()` must compute the same form, or the DB CHECK and the unique index would disagree with the API about what the stored value is. Enforced by the entity and backed by a DB CHECK, so any spelling collapses to one row.
 
 **Price**:
 What the customer pays per unit. Locked onto the order item at CONFIRMED.

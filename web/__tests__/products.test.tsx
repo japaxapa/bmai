@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => import("@/test/next-navigation"));
 
 const PRODUCTS_URL = `${DEFAULT_API_BASE_URL}/api/products`;
 const CATEGORIES_URL = `${DEFAULT_API_BASE_URL}/api/categories`;
+const SUPPLIERS_URL = `${DEFAULT_API_BASE_URL}/api/suppliers`;
 const ME_URL = `${DEFAULT_API_BASE_URL}/api/auth/me`;
 
 type Role = "ADMIN" | "MANAGER" | "EMPLOYEE";
@@ -29,6 +30,8 @@ type Product = {
   stock: number;
   categoryId: number;
   categoryName: string;
+  supplierId: number | null;
+  supplierName: string | null;
   active: boolean;
 };
 
@@ -44,6 +47,10 @@ const CAFE_ROW: Product = {
   stock: 42,
   categoryId: 1,
   categoryName: "Padaria",
+  // A product is born supplier-less (ticket #7): the link is optional, and
+  // "no supplier" is an absent id, never a sentinel the UI must filter out.
+  supplierId: null,
+  supplierName: null,
   active: true,
 };
 
@@ -59,6 +66,29 @@ function categoriesLoaded() {
         makeEnvelope([
           { id: 1, name: "Padaria", active: true },
           { id: 2, name: "Bebidas", active: true },
+        ]),
+      ),
+    ),
+  );
+}
+
+/**
+ * The vocabulary the form's supplier dropdown reads — any signed-in role may
+ * (business-rules §4: the dropdown must never be empty).
+ */
+function suppliersLoaded() {
+  server.use(
+    http.get(SUPPLIERS_URL, () =>
+      HttpResponse.json(
+        makeEnvelope([
+          {
+            id: 3,
+            name: "Acme Distribuidora",
+            document: "11222333000181",
+            email: "compras@acme.local",
+            paymentTermsDays: 30,
+            active: true,
+          },
         ]),
       ),
     ),
@@ -83,6 +113,7 @@ describe("products panel", () => {
   test("lists the products the API returns, with sku, category and the deactivated flag", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     server.use(
       http.get(PRODUCTS_URL, () =>
         HttpResponse.json(
@@ -124,6 +155,7 @@ describe("products panel", () => {
   test("creating a product posts the whole body and shows it in the list", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     let created = false;
     const requests: Request[] = [];
     server.use(
@@ -191,7 +223,8 @@ describe("products panel", () => {
     expect(requests[0].credentials).toBe("include");
     // The whole shape, numbers as numbers, empty description as null — the
     // server's DTO is the contract, not the form's strings.
-    expect(await requests[0].json()).toEqual({
+    const body = (await requests[0].json()) as Record<string, unknown>;
+    expect(body).toEqual({
       sku: "NOVO-1",
       name: "Novo produto",
       description: null,
@@ -200,11 +233,121 @@ describe("products panel", () => {
       minimumStock: 2,
       categoryId: 1,
     });
+    // Born supplier-less (ticket #7): an untouched dropdown stays *out* of
+    // the body, so "no supplier" stays the server's own null — never a
+    // sentinel id the domain would then refuse as unknown.
+    expect(body).not.toHaveProperty("supplierId");
+  });
+
+  // The product↔supplier link (#7): the dropdown is the same vocabulary the
+  // supplier panel writes to, and the id it posts is the FK the migration
+  // declared (V6) — the row it produces names the supplier, not just its id.
+  test("posting a chosen supplier links the product, and the row then names it", async () => {
+    signInAs("ADMIN", "admin@bms.local");
+    categoriesLoaded();
+    suppliersLoaded();
+    let created = false;
+    const requests: Request[] = [];
+    server.use(
+      http.get(PRODUCTS_URL, () =>
+        HttpResponse.json(
+          created
+            ? makeEnvelope([
+                {
+                  id: 10,
+                  sku: "ACAI-1",
+                  name: "Açaí 500ml",
+                  description: null,
+                  price: 12,
+                  cost: 7,
+                  minimumStock: 1,
+                  stock: 0,
+                  categoryId: 1,
+                  categoryName: "Padaria",
+                  supplierId: 3,
+                  supplierName: "Acme Distribuidora",
+                  active: true,
+                },
+              ])
+            : makeEnvelope([]),
+        ),
+      ),
+      http.post(PRODUCTS_URL, async ({ request }) => {
+        requests.push(request);
+        created = true;
+        return HttpResponse.json(
+          {
+            id: 10,
+            sku: "ACAI-1",
+            name: "Açaí 500ml",
+            description: null,
+            price: 12,
+            cost: 7,
+            minimumStock: 1,
+            stock: 0,
+            categoryId: 1,
+            categoryName: "Padaria",
+            supplierId: 3,
+            supplierName: "Acme Distribuidora",
+            active: true,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByRole("button", { name: "Create product" });
+
+    await user.type(screen.getByLabelText("SKU"), "ACAI-1");
+    await user.type(screen.getByLabelText("Name"), "Açaí 500ml");
+    await user.type(screen.getByLabelText("Price"), "12");
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.selectOptions(screen.getByLabelText("Supplier"), "3");
+    await user.click(screen.getByRole("button", { name: "Create product" }));
+
+    expect(await screen.findByText("Açaí 500ml")).toBeInTheDocument();
+    expect(requests).toHaveLength(1);
+    const body = (await requests[0].json()) as Record<string, unknown>;
+    expect(body.supplierId).toBe(3);
+    // The refetch carries the resolved name — the row displays who supplies
+    // it, not an id the reader has to look up.
+    expect(
+      within(screen.getByRole("list")).getByText("Acme Distribuidora"),
+    ).toBeInTheDocument();
+  });
+
+  // The other half of the link: no supplier selected, and the row says so
+  // rather than showing a stale or invented party.
+  test("shows the supplier a product names, and a dash for one that has none", async () => {
+    signInAs("ADMIN", "admin@bms.local");
+    categoriesLoaded();
+    suppliersLoaded();
+    server.use(
+      http.get(PRODUCTS_URL, () =>
+        HttpResponse.json(
+          makeEnvelope([
+            { ...CAFE_ROW, supplierId: 3, supplierName: "Acme Distribuidora" },
+            { ...CAFE_ROW, id: 8, sku: "TRIGO-2", name: "Trigo 1kg" },
+          ]),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Café 500g")).toBeInTheDocument();
+    // Scoped to the rows: the dropdown carries the same name as an option.
+    const rows = within(screen.getByRole("list"));
+    expect(rows.getByText("Acme Distribuidora")).toBeInTheDocument();
+    expect(rows.getByText("—")).toBeInTheDocument();
   });
 
   test("prints the conflict detail inline when the SKU is already taken", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     server.use(
       http.get(PRODUCTS_URL, () => HttpResponse.json(makeEnvelope([CAFE_ROW]))),
       http.post(PRODUCTS_URL, () =>
@@ -244,6 +387,7 @@ describe("products panel", () => {
   test("shows the API's field message on the field it names", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     server.use(
       http.get(PRODUCTS_URL, () => HttpResponse.json(makeEnvelope([CAFE_ROW]))),
       http.post(PRODUCTS_URL, () =>
@@ -299,6 +443,7 @@ describe("products panel", () => {
       cost: "1e999",
       minimumStock: "",
       categoryId: "1",
+      supplierId: "",
     };
     const parsed = productSchema.safeParse(values);
 
@@ -317,6 +462,7 @@ describe("products panel", () => {
   test("hides the write controls from a signed-in employee", async () => {
     signInAs("EMPLOYEE", "clerk@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     server.use(
       http.get(PRODUCTS_URL, () => HttpResponse.json(makeEnvelope([CAFE_ROW]))),
     );
@@ -335,6 +481,7 @@ describe("products panel", () => {
   test("shows the write controls to a manager (business-rules §4)", async () => {
     signInAs("MANAGER", "supervisor@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     server.use(
       http.get(PRODUCTS_URL, () => HttpResponse.json(makeEnvelope([CAFE_ROW]))),
     );
@@ -349,6 +496,7 @@ describe("products panel", () => {
   test("switches a product off from its row and says so", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     let active = true;
     const requests: Request[] = [];
     server.use(
@@ -387,6 +535,7 @@ describe("products panel", () => {
   test("a refused status change surfaces as a toast, never inside the form", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     server.use(
       http.get(PRODUCTS_URL, () => HttpResponse.json(makeEnvelope([CAFE_ROW]))),
       http.put(`${PRODUCTS_URL}/7/status`, () =>
@@ -428,6 +577,7 @@ describe("products panel", () => {
   test("edits a product through the same form, seeded from the row", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     let current = CAFE_ROW;
     const requests: Request[] = [];
     server.use(
@@ -482,6 +632,7 @@ describe("products panel", () => {
   test("searches the API as the term is typed, keeps it in the URL and re-roots the page", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     window.history.replaceState({}, "", "/products?page=1");
     const requested: string[] = [];
     server.use(
@@ -514,6 +665,7 @@ describe("products panel", () => {
   test("keeps the search while paging", async () => {
     signInAs("ADMIN", "admin@bms.local");
     categoriesLoaded();
+    suppliersLoaded();
     window.history.replaceState({}, "", "/products?search=cafe");
     const requested: string[] = [];
     server.use(
