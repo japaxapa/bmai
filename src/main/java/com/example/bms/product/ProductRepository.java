@@ -16,13 +16,13 @@ public interface ProductRepository {
      * search term (api-design: ILIKE on name and sku; {@code null} or blank
      * means no filter).
      */
-    List<ProductWithCategory> findAll(int page, int size, String search);
+    List<ProductRow> findAll(int page, int size, String search);
 
     /** Rows matching the search term — the count behind the page envelope. */
     long count(String search);
 
     /** The row with that id, empty when it does not exist (→ 404). */
-    Optional<ProductWithCategory> findById(long id);
+    Optional<ProductRow> findById(long id);
 
     /** Stores the row and answers it back with the id the database gave it. */
     Product save(Product product);

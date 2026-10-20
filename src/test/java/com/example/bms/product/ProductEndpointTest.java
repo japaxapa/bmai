@@ -103,12 +103,12 @@ class ProductEndpointTest {
                     8, "TRIGO-2", "Trigo 1kg", null,
                     new BigDecimal("5.50"), new BigDecimal("3.20"),
                     0, 120, 3, null, true);
-            List<ProductWithCategory> rows = List.of(
-                    new ProductWithCategory(cafe, "Padaria", "Café Bom LTDA"),
-                    new ProductWithCategory(trigo, "Padaria", null));
+            List<ProductRow> rows = List.of(
+                    new ProductRow(cafe, "Padaria", "Café Bom LTDA"),
+                    new ProductRow(trigo, "Padaria", null));
             return new ProductRepository() {
                 @Override
-                public List<ProductWithCategory> findAll(int page, int size, String search) {
+                public List<ProductRow> findAll(int page, int size, String search) {
                     return matching(search).stream()
                             .skip((long) page * size)
                             .limit(size)
@@ -120,7 +120,7 @@ class ProductEndpointTest {
                     return matching(search).size();
                 }
 
-                private List<ProductWithCategory> matching(String search) {
+                private List<ProductRow> matching(String search) {
                     if (search == null || search.isBlank()) {
                         return rows;
                     }
@@ -132,7 +132,7 @@ class ProductEndpointTest {
                 }
 
                 @Override
-                public Optional<ProductWithCategory> findById(long id) {
+                public Optional<ProductRow> findById(long id) {
                     return rows.stream().filter(row -> row.product().id() == id).findFirst();
                 }
 

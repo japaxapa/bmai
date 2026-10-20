@@ -75,7 +75,7 @@ public class ProductService {
         // write happen first and only then fail.
         var supplierName = supplierNameOf(request.supplierId());
         var stored = store(build(request, 0, 0, true));
-        return responseOf(new ProductWithCategory(stored, category.name(), supplierName));
+        return responseOf(new ProductRow(stored, category.name(), supplierName));
     }
 
     /**
@@ -141,7 +141,7 @@ public class ProductService {
                 .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
         var current = existing.product();
         var stored = store(build(request, current.id(), current.stock(), current.active()));
-        return responseOf(new ProductWithCategory(
+        return responseOf(new ProductRow(
                 stored, category.name(), supplierNameOf(request.supplierId())));
     }
 
@@ -159,12 +159,12 @@ public class ProductService {
         // The status verb takes no body beyond {active}, so the names are the
         // ones already resolved on the loaded row — no re-resolution, and no
         // way for the flip to blank a link.
-        return responseOf(new ProductWithCategory(
+        return responseOf(new ProductRow(
                 stored, existing.categoryName(), existing.supplierName()));
     }
 
     /** Entity + resolved names → API response, in one place. */
-    static ProductResponse responseOf(ProductWithCategory row) {
+    static ProductResponse responseOf(ProductRow row) {
         var product = row.product();
         return new ProductResponse(
                 product.id(), product.sku(), product.name(), product.description(),

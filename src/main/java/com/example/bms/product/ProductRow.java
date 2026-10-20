@@ -8,6 +8,6 @@ package com.example.bms.product;
  * {@code String} that may be null: the absent supplier is expressed as an
  * absent answer, not a sentinel the UI would have to filter out.
  */
-public record ProductWithCategory(Product product, String categoryName,
+public record ProductRow(Product product, String categoryName,
                                   String supplierName) {
 }

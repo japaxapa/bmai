@@ -37,8 +37,8 @@ public class JdbcProductRepository implements ProductRepository {
      * and the supplier's does too (left join — a product may have none, and
      * an inner join would simply make it invisible in the list).
      */
-    private static final RowMapper<ProductWithCategory> PRODUCT_ROW = (rs, rowNum) ->
-            new ProductWithCategory(
+    private static final RowMapper<ProductRow> PRODUCT_ROW = (rs, rowNum) ->
+            new ProductRow(
                     new Product(
                             rs.getLong("id"),
                             rs.getString("sku"),
@@ -61,7 +61,7 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public List<ProductWithCategory> findAll(int page, int size, String search) {
+    public List<ProductRow> findAll(int page, int size, String search) {
         var term = likeTerm(search);
         // lower(p.sku) in ORDER BY matches the V4 index's notion of a SKU,
         // so the list orders the same way uniqueness compares.
@@ -93,7 +93,7 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public Optional<ProductWithCategory> findById(long id) {
+    public Optional<ProductRow> findById(long id) {
         return jdbc.query(
                         "select " + COLUMNS + ", c.name as category_name, s.name as supplier_name "
                                 + "from products p "
