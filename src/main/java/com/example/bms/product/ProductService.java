@@ -2,15 +2,13 @@ package com.example.bms.product;
 
 import com.example.bms.shared.PageWindow;
 import com.example.bms.shared.PagedEnvelope;
-import com.example.bms.supplier.SupplierNotFoundException;
-import com.example.bms.supplier.SupplierRepository;
+import com.example.bms.supplier.SupplierService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 
 /**
  * Product use cases (architecture §2: the application service is
@@ -25,10 +23,10 @@ public class ProductService {
 
     private final ProductRepository products;
     private final CategoryRepository categories;
-    private final SupplierRepository suppliers;
+    private final SupplierService suppliers;
 
     public ProductService(ProductRepository products, CategoryRepository categories,
-                          SupplierRepository suppliers) {
+                          SupplierService suppliers) {
         this.products = products;
         this.categories = categories;
         this.suppliers = suppliers;
@@ -82,18 +80,18 @@ public class ProductService {
 
     /**
      * The supplier name behind an optional id. Null (or absent) means "no
-     * supplier yet" and stays null; an id nobody answers for is a 404,
-     * exactly like the required category above — the link is a real
-     * reference either way, so it must not fall through to a foreign-key
-     * 500 leaking SQL to the caller.
+     * supplier yet" and stays null; an id nobody answers for is the supplier
+     * feature's own 404, exactly like the required category above — the link
+     * is a real reference either way, so it must not fall through to a
+     * foreign-key 500 leaking SQL to the caller. The resolution itself lives
+     * on {@link SupplierService#findName} (architecture §1: a feature's reads
+     * are reached through its public service, never its repository).
      */
     private String supplierNameOf(Long supplierId) {
         if (supplierId == null) {
             return null;
         }
-        return suppliers.findById(supplierId)
-                .orElseThrow(() -> new SupplierNotFoundException(supplierId))
-                .name();
+        return suppliers.findName(supplierId);
     }
 
     /**

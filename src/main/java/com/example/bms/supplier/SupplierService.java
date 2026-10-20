@@ -50,6 +50,26 @@ public class SupplierService {
     }
 
     /**
+     * The supplier's display name for an unknown-to-the-caller id — the read
+     * another feature needs to resolve its supplier link (the product form's
+     * dropdown). Architecture §1: features reach each other through a public
+     * service, never a repository, so this method is that seam. An unknown id
+     * is this feature's own 404 ({@link SupplierNotFoundException}), which the
+     * caller's advice renders like any other problem+json — the caller never
+     * touches our entities or our repository.
+     *
+     * <p>Deliberately ungated, like {@link #list}: it is the read side of
+     * business-rules §4, and the product write that calls it is already
+     * ADMIN/MANAGER at its own boundary.
+     */
+    @Transactional(readOnly = true)
+    public String findName(long id) {
+        return suppliers.findById(id)
+                .orElseThrow(() -> new SupplierNotFoundException(id))
+                .name();
+    }
+
+    /**
      * Create: business-rules §4 row "Create/edit supplier" — ADMIN and MANAGER
      * write, EMPLOYEE does not. The reads stay ungated above; the URL layer
      * requires a signed-in caller either way.

@@ -3,6 +3,7 @@ package com.example.bms.product;
 import com.example.bms.shared.SecurityConfig;
 import com.example.bms.supplier.Supplier;
 import com.example.bms.supplier.SupplierRepository;
+import com.example.bms.supplier.SupplierService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -43,7 +44,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * controller a later ticket adds costs this file nothing.
  */
 @WebMvcTest(controllers = ProductController.class)
-@Import({SecurityConfig.class, CategoryService.class, ProductService.class})
+@Import({SecurityConfig.class, CategoryService.class, SupplierService.class,
+        ProductService.class})
 class ProductEndpointTest {
 
     @Autowired
@@ -144,8 +146,12 @@ class ProductEndpointTest {
 
     /**
      * The suppliers boundary, wired because the product create now resolves
-     * a supplier name. The known row (id 7) is the one the supplier tests
-     * link to; the repository is never asked for a list by this slice.
+     * a supplier name — through {@link SupplierService} (architecture §1:
+     * the product feature reaches suppliers via their public service, so
+     * the real service is imported and only the repository is stubbed, the
+     * same split as categories above). The known row (id 7) is the one the
+     * supplier tests link to; the repository is never asked for a list by
+     * this slice.
      */
     @TestConfiguration
     static class StubbedSuppliers {
