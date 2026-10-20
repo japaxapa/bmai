@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * The suppliers HTTP surface (api-design: CRUD + status + search/filter/
  * pagination). Each verb arrives with the test that pins it — this slice has
- * the read side; create, edit and status follow.
+ * the read side, create, edit and status.
  */
 @RestController
 @RequestMapping("/api/suppliers")
