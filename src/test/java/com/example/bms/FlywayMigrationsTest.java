@@ -182,6 +182,54 @@ class FlywayMigrationsTest {
     }
 
     /**
+     * V6's name cell — the category CHECK's twin (business-rules §5: 1–120
+     * chars). Both edges bite for a writer that bypasses the API, which is
+     * the half §10 deliberately left behind when it moved the *first*
+     * refusal up to {@code @Size}; nothing else in the suite pins that this
+     * backstop still exists. The document fixture is a well-formed CNPJ on
+     * purpose: a malformed one would let the document-length CHECK bite
+     * first, and the test would then pass for the wrong constraint.
+     */
+    @Test
+    void theSupplierNameLengthCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() -> jdbc.update(
+                        "insert into suppliers (name, document) values (?, ?)",
+                        "x".repeat(121), "22334455000177"))
+                .as("the 120-char cap is a CHECK, not only an @Size")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatThrownBy(() -> jdbc.update(
+                        "insert into suppliers (name, document) values (?, ?)",
+                        "", "22334455000177"))
+                .as("the 1-char floor is the same CHECK")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * The other V6 cell nothing pins: terms are ≥ 0 days (business-rules §3
+     * — "Net 30" and every shorter window are legal; negative days are not a
+     * window). −5 bites, and 0 is *stored*, pinning the floor as inclusive —
+     * a CHECK one notch too tight would silently refuse the same-day terms
+     * the API's own guard lets through, and no other test would notice.
+     */
+    @Test
+    void thePaymentTermsCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() -> jdbc.update("""
+                        insert into suppliers (name, document, payment_terms_days)
+                        values (?, ?, ?)
+                        """, "Prazo negativo LTDA", "33445566000188", -5))
+                .as("negative days is not a payment window")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatCode(() -> jdbc.update("""
+                        insert into suppliers (name, document, payment_terms_days)
+                        values (?, ?, ?)
+                        """, "Mesmo dia LTDA", "44556677000199", 0))
+                .as("zero is the floor, and the floor is inclusive")
+                .doesNotThrowAnyException();
+    }
+
+    /**
      * Ticket 7's other half: a product may name its supplier, and the FK
      * refuses a supplier that does not exist. RESTRICT (never CASCADE) is
      * the same choice category_id made — retiring a party is a status flip,
