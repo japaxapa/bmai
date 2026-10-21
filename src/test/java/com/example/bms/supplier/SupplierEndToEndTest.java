@@ -172,6 +172,57 @@ class SupplierEndToEndTest {
     }
 
     /**
+     * The length rule against the real stack: V6's
+     * {@code suppliers_name_length} CHECK (1–120) stays the backstop for
+     * write paths that bypass the entity, but a person typing into the form
+     * meets the documented 400 naming the field — never the unhandled 500 a
+     * CHECK violation answers when Postgres is the first to object. And no
+     * row hides behind the refusal: the check runs before anything is
+     * written.
+     */
+    @Test
+    void overlongNameIsA400AndStoresNothing() {
+        var cookie = adminCookie();
+
+        var response = post("/api/suppliers", Map.of(
+                "name", "x".repeat(121), "document", "11.222.333/0001-81"), cookie);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(response.getHeaders().getContentType().toString())
+                .as("RFC 9457 body, same shape as every other refusal")
+                .contains("problem+json");
+        assertThat(field(response.getBody(), "$.fieldErrors.name[0]"))
+                .as("the field is named, so the form prints the sentence under the box")
+                .isEqualTo("Name must be at most 120 characters.");
+        var listed = get("/api/suppliers?search=xxxxxxxx", cookie);
+        assertThat((Integer) field(listed.getBody(), "$.total"))
+                .as("and nothing was stored behind the refusal")
+                .isEqualTo(0);
+    }
+
+    /**
+     * The range rule against the real stack, in Product's shape: the entity
+     * refuses the negative terms as a 422 sentence, so V6's
+     * {@code payment_terms_days >= 0} CHECK is never the first judge — against
+     * a stubbed boundary the slice can only *ask* for this refusal, and only
+     * here can the CHECK's 500 be shown to be gone.
+     */
+    @Test
+    void negativePaymentTermsAreA422NotTheCheckS500() {
+        var cookie = adminCookie();
+
+        var response = post("/api/suppliers", Map.of(
+                "name", "Prazo negativo LTDA", "document", "11.222.333/0001-81",
+                "paymentTermsDays", -5), cookie);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(422);
+        assertThat(response.getHeaders().getContentType().toString())
+                .contains("problem+json");
+        assertThat(field(response.getBody(), "$.detail"))
+                .isEqualTo("Payment terms cannot be negative.");
+    }
+
+    /**
      * business-rules §4 row "Create/edit supplier": ADMIN and MANAGER write,
      * nobody else. The URL layer is authenticated-only, so what refuses these
      * is the {@code @PreAuthorize} on the write service.

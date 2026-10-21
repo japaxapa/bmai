@@ -15,6 +15,13 @@ package com.example.bms.supplier;
  * <p>The check-digit judgement runs in the constructor — the invariant's home
  * (ADR 0017) — but the modulus-11 arithmetic itself lives in
  * {@link CheckDigits}, the one copy of the rule the fixture generators share.
+ *
+ * <p>{@code paymentTermsDays} is judged here for the same reason the
+ * document is: it is a business range (≥ 0 days, business-rules §3), not DTO
+ * shape, so the refusal is this 422 rather than whatever V6's
+ * {@code payment_terms_days >= 0} CHECK would answer — an unhandled 500
+ * leaking SQL to the caller. The CHECK stays as the backstop for write paths
+ * that never pass through the entity (seeds, raw SQL).
  */
 public record Supplier(
         long id,
@@ -33,6 +40,9 @@ public record Supplier(
         }
         if (!CheckDigits.matches(document)) {
             throw new InvalidSupplierException("Document check digits do not match.");
+        }
+        if (paymentTermsDays < 0) {
+            throw new InvalidSupplierException("Payment terms cannot be negative.");
         }
     }
 

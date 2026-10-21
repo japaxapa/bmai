@@ -243,6 +243,51 @@ class SupplierEndpointTest {
     }
 
     /**
+     * The shape rule the category field already carries, byte for byte
+     * (CategoryRequest's {@code @Size}): name tops out at 120, V6's
+     * {@code suppliers_name_length} CHECK included. Answered 400 *naming the
+     * field* — the refusal router (lib/api/refusal.ts) prints fieldErrors on
+     * the field itself, so the form shows the sentence under the Name box
+     * rather than as a generic banner. Without the annotation the 121st
+     * character sails past every DTO rule and Postgres answers first — as an
+     * unhandled 500, no field named and no sentence to show.
+     */
+    @Test
+    void overlongNameIsRefusedAsA400NamingTheField() throws Exception {
+        mvc.perform(post("/api/suppliers").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + "x".repeat(121)
+                                + "\",\"document\":\"11.222.333/0001-81\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.fieldErrors.name[0]")
+                        .value("Name must be at most 120 characters."));
+    }
+
+    /**
+     * The domain's own refusal, in Product's exact shape ("Minimum stock
+     * cannot be negative."): payment terms are a business range (≥ 0 days),
+     * not DTO shape, so the entity judges (ADR 0017) and the advice layer
+     * answers 422 with the sentence the UI renders inline. Without the guard
+     * a negative value answers V6's CHECK — an unhandled 500 with no sentence
+     * for any channel to render.
+     */
+    @Test
+    void negativePaymentTermsAreRefusedAs422() throws Exception {
+        mvc.perform(post("/api/suppliers").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Prazo impossível LTDA","document":"11.222.333/0001-81",
+                                 "paymentTermsDays":-5}
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("Payment terms cannot be negative."));
+    }
+
+    /**
      * business-rules §4, row "Create/edit supplier": ADMIN and MANAGER write,
      * EMPLOYEE does not — and EMPLOYEE is the role a reader would assume is
      * privileged (it can create customers). The refusal carries a body: the
