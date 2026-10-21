@@ -301,7 +301,10 @@ describe("categories panel", () => {
             type: "about:blank",
             title: "Not Found",
             status: 404,
-            detail: "Category 7 was not found.",
+            // The real sentence (CategoryNotFoundException) — the mock pins
+            // the contract the server actually sends, not a fiction the
+            // toast happens to render.
+            detail: "No category with id 7",
           },
           {
             status: 404,
@@ -325,7 +328,7 @@ describe("categories panel", () => {
     );
 
     // The sentence reached the user...
-    expect(await screen.findByText("Category 7 was not found.")).toBeInTheDocument();
+    expect(await screen.findByText("No category with id 7")).toBeInTheDocument();
     // ...and the create/rename form's alert stayed empty: a status failure
     // must not masquerade as a name conflict.
     expect(screen.queryByRole("alert")).toBeNull();
