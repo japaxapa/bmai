@@ -11,6 +11,10 @@ package com.example.bms.supplier;
  * (GLOSSARY "Canonical form"): digits only. The punctuation a person types is
  * presentation — {@code 11.222.333/0001-81} and {@code 11222333000181} are one
  * spelling to the unique index and to a person reading them.
+ *
+ * <p>The check-digit judgement runs in the constructor — the invariant's home
+ * (ADR 0017) — but the modulus-11 arithmetic itself lives in
+ * {@link CheckDigits}, the one copy of the rule the fixture generators share.
  */
 public record Supplier(
         long id,
@@ -27,58 +31,9 @@ public record Supplier(
             throw new InvalidSupplierException(
                     "Document must be 11 digits (CPF) or 14 digits (CNPJ).");
         }
-        if (!hasMatchingCheckDigits(document)) {
+        if (!CheckDigits.matches(document)) {
             throw new InvalidSupplierException("Document check digits do not match.");
         }
-    }
-
-    /**
-     * The CPF/CNPJ verification digits (GLOSSARY's CPF/CNPJ-style document).
-     * Both are modulus-11: a weighted sum of the digits, {@code r = sum % 11},
-     * and the digit is {@code r < 2 ? 0 : 11 - r} — CPF over its two windows
-     * (weights 10→2, then 11→2), CNPJ over its two fixed tables (5,4,3,2,
-     * 9,8,7,6,5,4,3,2 then 6,5,4,3,2,9,8,7,6,5,4,3,2).
-     *
-     * <p>Deliberately pure code on the entity (ADR 0017) rather than a
-     * database CHECK: a checksum is arithmetic, not a constraint Postgres can
-     * express without a function — and every write path funnels through this
-     * constructor anyway, so nothing can skip it by skipping the service.
-     */
-    private static boolean hasMatchingCheckDigits(String digits) {
-        return digits.length() == 11
-                ? cpfCheckDigitsMatch(digits)
-                : cnpjCheckDigitsMatch(digits);
-    }
-
-    private static boolean cpfCheckDigitsMatch(String digits) {
-        var first = checkDigit(digits, 9, index -> 10 - index);
-        if (first != digits.charAt(9) - '0') {
-            return false;
-        }
-        var second = checkDigit(digits, 10, index -> 11 - index);
-        return second == digits.charAt(10) - '0';
-    }
-
-    private static boolean cnpjCheckDigitsMatch(String digits) {
-        var firstWeights = new int[] {5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2};
-        var first = checkDigit(digits, 12, index -> firstWeights[index]);
-        if (first != digits.charAt(12) - '0') {
-            return false;
-        }
-        var secondWeights = new int[] {6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2};
-        var second = checkDigit(digits, 13, index -> secondWeights[index]);
-        return second == digits.charAt(13) - '0';
-    }
-
-    /** The modulus-11 digit for the first {@code length} digits of {@code digits}. */
-    private static int checkDigit(String digits, int length,
-                                  java.util.function.IntUnaryOperator weight) {
-        var sum = 0;
-        for (var index = 0; index < length; index++) {
-            sum += (digits.charAt(index) - '0') * weight.applyAsInt(index);
-        }
-        var remainder = sum % 11;
-        return remainder < 2 ? 0 : 11 - remainder;
     }
 
     /**

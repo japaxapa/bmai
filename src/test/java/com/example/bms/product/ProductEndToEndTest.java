@@ -1,6 +1,7 @@
 package com.example.bms.product;
 
 import com.example.bms.auth.AuthCookie;
+import com.example.bms.supplier.CheckDigits;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -398,32 +399,19 @@ class ProductEndToEndTest {
     /**
      * A 14-digit CNPJ whose check digits the domain will accept: an 12-digit
      * body padded from the counter (unique per invocation), then the two
-     * modulus-11 digits that body implies. Computed rather than hardcoded —
-     * a fixture table would go stale the moment a test wanted a second
-     * supplier — and verified against {@code Supplier}'s own rule before use.
+     * modulus-11 digits that body implies — computed by
+     * {@link CheckDigits#cnpjWithCheckDigits}, the very rule the domain
+     * judges with, so there is one copy of the arithmetic in the repo rather
+     * than a production copy and a test copy that must be kept in step.
+     * Computed rather than hardcoded — a fixture table would go stale the
+     * moment a test wanted a second supplier.
      */
     private String uniqueDocument() {
         var body = "%d".formatted(sequence.incrementAndGet() % 10_000_000_000L);
         if (body.length() < 12) {
             body = "0".repeat(12 - body.length()) + body;
         }
-        var first = checkDigit(body, CNPJ_FIRST_WEIGHTS);
-        var second = checkDigit(body + first, CNPJ_SECOND_WEIGHTS);
-        return body + first + second;
-    }
-
-    /** The same two tables {@code Supplier} verifies against — one rule, both sides. */
-    private static final int[] CNPJ_FIRST_WEIGHTS = {5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2};
-    private static final int[] CNPJ_SECOND_WEIGHTS = {6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2};
-
-    /** One modulus-11 digit over the first {@code weights.length} digits. */
-    private static int checkDigit(String digits, int[] weights) {
-        var sum = 0;
-        for (var index = 0; index < weights.length; index++) {
-            sum += (digits.charAt(index) - '0') * weights[index];
-        }
-        var remainder = sum % 11;
-        return remainder < 2 ? 0 : 11 - remainder;
+        return CheckDigits.cnpjWithCheckDigits(body);
     }
 
     /** Creates a category through its own API and answers its id. */
