@@ -359,7 +359,10 @@ describe("suppliers panel", () => {
             type: "about:blank",
             title: "Not Found",
             status: 404,
-            detail: "Supplier 1 was not found.",
+            // The real sentence (SupplierNotFoundException): the mock must
+            // pin the contract the server actually sends, not a fiction the
+            // toast happens to render.
+            detail: "No supplier with id 1",
           },
           {
             status: 404,
@@ -383,7 +386,7 @@ describe("suppliers panel", () => {
     );
 
     // The sentence reached the user...
-    expect(await screen.findByText("Supplier 1 was not found.")).toBeInTheDocument();
+    expect(await screen.findByText("No supplier with id 1")).toBeInTheDocument();
     // ...and the create form's alert stayed empty: a status failure must not
     // masquerade as a document conflict.
     expect(screen.queryByRole("alert")).toBeNull();
