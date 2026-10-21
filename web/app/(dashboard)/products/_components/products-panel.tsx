@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -13,8 +13,8 @@ import {
   type ProductBody,
 } from "@/features/products/api";
 import { suppliersQuery } from "@/features/suppliers/api";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { usePageParam } from "@/hooks/use-page-param";
-import { useSearchParam } from "@/hooks/use-search-param";
 import { optionalNumber } from "@/lib/forms/optional-number";
 import { refusalHandlers } from "@/lib/api/refusal";
 import { writeJson } from "@/lib/api/write";
@@ -99,21 +99,14 @@ export function ProductsPanel() {
   // (one record of field rules — create cannot drift from edit).
   const [editing, setEditing] = useState<Product | null>(null);
 
-  // The page lives in the URL (usePageParam) and so does the search term
-  // (useSearchParam, ADR 0019): both survive a reload and stay shareable,
-  // and the query key carries both — each (page, term) pair is its own
-  // cache entry, while the prefix invalidation below clears all of them.
+  // Page and search term both live in the URL (usePageParam +
+  // useDebouncedSearch, ADR 0019): both survive a reload and stay
+  // shareable, and the query key carries both — each (page, search) pair
+  // is its own cache entry, while the prefix invalidation below clears all
+  // of them. The box's own instant-feel clock is the hook's rule, not
+  // this panel's.
   const { page, goToPage } = usePageParam();
-  const [search, setSearch] = useSearchParam("search", ["page"]);
-  // The box's own value, so typing feels instant; it reaches the URL (and
-  // therefore the API) after a short pause — one request per thought, not
-  // one per keystroke.
-  const [term, setTerm] = useState(search);
-  useEffect(() => {
-    if (term === search) return;
-    const timer = setTimeout(() => setSearch(term), 300);
-    return () => clearTimeout(timer);
-  }, [term, search, setSearch]);
+  const { term, setTerm, search } = useDebouncedSearch();
   const { data, error } = useQuery(productsQuery(page, search));
   // The two dropdowns' vocabularies (business-rules §4: reading them is open
   // to every signed-in role precisely so neither dropdown is ever empty).
