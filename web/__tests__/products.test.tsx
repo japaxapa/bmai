@@ -627,6 +627,56 @@ describe("products panel", () => {
     });
   });
 
+  // The edit half the list above cannot reach: the dropdown holds one page of
+  // ≤100 (api-design size cap — the same window the category select has), so a
+  // product may name a supplier that page does not carry. Seeding that id into
+  // a <select> with no matching option reads back as "" — toBody omits
+  // supplierId, and the save answers 200 with the link silently gone. The row
+  // carries its own link (id + resolved name), so the form can offer it as an
+  // option without a second fetch.
+  test("keeps a supplier missing from the dropdown when the edit is saved", async () => {
+    signInAs("ADMIN", "admin@bms.local");
+    categoriesLoaded();
+    suppliersLoaded(); // only id 3 — the product below names id 9
+    const requests: Request[] = [];
+    server.use(
+      http.get(PRODUCTS_URL, () =>
+        HttpResponse.json(
+          makeEnvelope([
+            { ...CAFE_ROW, supplierId: 9, supplierName: "Fornecedor da página 2" },
+          ]),
+        ),
+      ),
+      http.put(`${PRODUCTS_URL}/7`, async ({ request }) => {
+        requests.push(request.clone());
+        return HttpResponse.json({
+          ...CAFE_ROW,
+          supplierId: 9,
+          supplierName: "Fornecedor da página 2",
+        });
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText("CAFE-1");
+
+    await user.click(screen.getByRole("button", { name: "Edit Café 500g" }));
+
+    // The seeded value matches an option — the row's own link, offered from
+    // data the API already sent. Without it the select reads back "" (no
+    // option matches), which is where the unlink below would come from.
+    expect(screen.getByLabelText("Supplier")).toHaveValue("9");
+
+    await user.type(screen.getByDisplayValue("Café 500g"), " torra escura");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(requests).toHaveLength(1);
+    const body = (await requests[0].json()) as Record<string, unknown>;
+    expect(body.supplierId).toBe(9);
+    expect(body.name).toBe("Café 500g torra escura");
+  });
+
   // filter state in the URL (testing-strategy §4, ADR 0019): a search is
   // state that must survive a reload and stay shareable.
   test("searches the API as the term is typed, keeps it in the URL and re-roots the page", async () => {

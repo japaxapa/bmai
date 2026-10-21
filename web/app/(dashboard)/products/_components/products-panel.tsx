@@ -327,18 +327,35 @@ export function ProductsPanel() {
             </label>
             {/* The one optional link on the form: "No supplier" is the empty
                 value, which `toBody` leaves out of the body — the server
-                stores null, never a made-up id. */}
+                stores null, never a made-up id.
+
+                The list is one page of ≤100 (api-design size cap — the same
+                window the category select has), so a *linked* supplier may not
+                be in it. That id is therefore offered as its own option, taken
+                from the row the API already sent: an id with no matching
+                option reads back as "" from the select, toBody omits it, and
+                the save would answer 200 having silently unlinked the
+                supplier. The linked id's option lives outside the map (and is
+                filtered out of it) so its element identity survives the list
+                arriving late — the selection must not fall off mid-edit. */}
             <select
               id="product-supplier"
               className="h-9 rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700"
               {...register("supplierId")}
             >
               <option value="">No supplier</option>
-              {suppliers?.items.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
+              {(suppliers?.items ?? [])
+                .filter((supplier) => supplier.id !== editing?.supplierId)
+                .map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              {editing?.supplierId != null && (
+                <option key={editing.supplierId} value={editing.supplierId}>
+                  {editing.supplierName ?? `Supplier #${editing.supplierId}`}
                 </option>
-              ))}
+              )}
             </select>
           </div>
 
