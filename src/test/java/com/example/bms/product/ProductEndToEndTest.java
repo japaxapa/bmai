@@ -388,6 +388,43 @@ class ProductEndToEndTest {
                 .isEmpty();
     }
 
+    /**
+     * The edit half of the same rule, and the half only this seam can pin:
+     * {@code edit} must resolve the supplier *before* {@code store(...)}.
+     * Resolving after it trips V6's foreign key inside the UPDATE and answers
+     * an untranslated 500 instead of the documented 404 — the row survives
+     * only because the transaction rolled back, which no assertion at the
+     * HTTP seam would otherwise notice.
+     */
+    @Test
+    void anUnknownSupplierOnEditIsA404AndChangesNothing() {
+        var cookie = adminCookie();
+        var categoryId = createCategoryNamed(uniqueName("Fornecedor-404-edit"), cookie);
+        var sku = uniqueSku("FORNECEDOR-404-EDIT");
+        var created = post("/api/products", Map.of(
+                "sku", sku, "name", "Café fiel", "price", "10.00",
+                "categoryId", categoryId), cookie);
+        var id = (Number) field(created.getBody(), "$.id");
+
+        var refused = put("/api/products/" + id, Map.of(
+                "sku", sku, "name", "Café trocado", "price", "99.00",
+                "categoryId", categoryId, "supplierId", 999_999L), cookie);
+
+        assertThat(refused.getStatusCode().value())
+                .as("the unknown id is a 404 resolved before the write, exactly as on create")
+                .isEqualTo(404);
+        assertThat(refused.getHeaders().getContentType().toString())
+                .as("RFC 9457 body, same shape as every other refusal")
+                .contains("problem+json");
+        assertThat(field(refused.getBody(), "$.status")).isEqualTo(404);
+        var row = itemSkued(get("/api/products?search=" + sku, cookie).getBody(), sku.toLowerCase());
+        assertThat(row).isNotNull();
+        assertThat(row.get("name"))
+                .as("and the refusal came before the UPDATE — the stored row is untouched")
+                .isEqualTo("Café fiel");
+        assertThat(row.get("price")).isEqualTo(10.00);
+    }
+
     /** Creates a supplier through its own API and answers its id. */
     private long createSupplierNamed(String name, String cookie) {
         var response = post("/api/suppliers", Map.of(

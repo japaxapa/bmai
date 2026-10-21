@@ -535,6 +535,26 @@ class ProductEndpointTest {
     }
 
     /**
+     * The same refusal for the same field on PUT: the contract is symmetric,
+     * whatever the row currently links to. Note what this slice *cannot*
+     * prove — the stubbed boundary has no foreign key, so it answers 404 no
+     * matter when the resolution runs; the ordering itself is
+     * {@link ProductEndToEndTest}'s to pin.
+     */
+    @Test
+    void unknownSupplierOnEditIsA404ProblemJson() throws Exception {
+        mvc.perform(put("/api/products/7").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sku":"CAFE-1","name":"Fornecedor órfão","price":1,
+                                 "categoryId":7,"supplierId":999}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    /**
      * api-design: products carry {@code ?search=} — an ILIKE over name and
      * sku. This slice pins the wiring (URL → service → boundary, term
      * intact); the real case-insensitive match against Postgres is seam B's.

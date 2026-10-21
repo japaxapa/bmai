@@ -139,10 +139,13 @@ public class ProductService {
                 .orElseThrow(() -> new ProductNotFoundException(id));
         var category = categories.findById(request.categoryId())
                 .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
+        // Same order as create above: the link resolves before anything is written, so
+        // an unknown id is a 404 rather than the foreign-key 500 V6's constraint would
+        // raise inside the UPDATE.
+        var supplierName = supplierNameOf(request.supplierId());
         var current = existing.product();
         var stored = store(build(request, current.id(), current.stock(), current.active()));
-        return responseOf(new ProductRow(
-                stored, category.name(), supplierNameOf(request.supplierId())));
+        return responseOf(new ProductRow(stored, category.name(), supplierName));
     }
 
     /**
