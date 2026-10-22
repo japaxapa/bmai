@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -133,6 +134,132 @@ class FlywayMigrationsTest {
                 "insert into products (sku, name, price, category_id) values (?, ?, ?, ?)",
                 "CAFE-UPPER", "Caixa alta", 10, category))
                 .as("the lowercase half of the same CHECK — the index's spelling is the only spelling")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * Ticket 7, AC "Constraint violations return 409/422": the unique
+     * {@code document} index refuses the duplicate at the database, so it
+     * cannot depend on a service remembering to check first.
+     *
+     * <p>Unlike the SKU and category-name indexes this one is exact, not
+     * lower()-based: a CPF/CNPJ is digits, so there is no case to fold —
+     * and no spelling for the index to collapse either. The two spellings
+     * collide *before* the index sees them, because the entity strips the
+     * punctuation (the row is stored as digits); what is asserted here is
+     * that the index then refuses the second row on the digits alone.
+     */
+    @Test
+    void theUniqueSupplierDocumentIndexBitesAtTheDatabaseLevel() {
+        jdbc.update("""
+                        insert into suppliers (name, document)
+                        values (?, ?)
+                        """, "Torrefação Aurora LTDA", "12345678000195");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                        insert into suppliers (name, document)
+                        values (?, ?)
+                        """, "Aurora duplicada", "12345678000195"))
+                .as("the index refuses the second row on the digits alone")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * V6's length CHECK: 11 digits is a CPF, 14 a CNPJ, anything else is not
+     * a document. The check *digits* stay on the entity (ADR 0017) — a
+     * modulus-11 checksum is arithmetic, not a CHECK — so this is the shape
+     * half, and the backstop for a writer that is not the API.
+     */
+    @Test
+    void theSupplierDocumentLengthCheckBitesAtTheDatabaseLevel() {
+        for (var length : new int[] {10, 12, 13, 15}) {
+            assertThatThrownBy(() -> jdbc.update(
+                            "insert into suppliers (name, document) values (?, ?)",
+                            "Documento torto", "1".repeat(length)))
+                    .as("%d digits is neither a CPF nor a CNPJ".formatted(length))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        }
+    }
+
+    /**
+     * V6's name cell — the category CHECK's twin (business-rules §5: 1–120
+     * chars). Both edges bite for a writer that bypasses the API, which is
+     * the half §10 deliberately left behind when it moved the *first*
+     * refusal up to {@code @Size}; nothing else in the suite pins that this
+     * backstop still exists. The document fixture is a well-formed CNPJ on
+     * purpose: a malformed one would let the document-length CHECK bite
+     * first, and the test would then pass for the wrong constraint.
+     */
+    @Test
+    void theSupplierNameLengthCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() -> jdbc.update(
+                        "insert into suppliers (name, document) values (?, ?)",
+                        "x".repeat(121), "22334455000177"))
+                .as("the 120-char cap is a CHECK, not only an @Size")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatThrownBy(() -> jdbc.update(
+                        "insert into suppliers (name, document) values (?, ?)",
+                        "", "22334455000177"))
+                .as("the 1-char floor is the same CHECK")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * The other V6 cell nothing pins: terms are ≥ 0 days (business-rules §3
+     * — "Net 30" and every shorter window are legal; negative days are not a
+     * window). −5 bites, and 0 is *stored*, pinning the floor as inclusive —
+     * a CHECK one notch too tight would silently refuse the same-day terms
+     * the API's own guard lets through, and no other test would notice.
+     */
+    @Test
+    void thePaymentTermsCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() -> jdbc.update("""
+                        insert into suppliers (name, document, payment_terms_days)
+                        values (?, ?, ?)
+                        """, "Prazo negativo LTDA", "33445566000188", -5))
+                .as("negative days is not a payment window")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatCode(() -> jdbc.update("""
+                        insert into suppliers (name, document, payment_terms_days)
+                        values (?, ?, ?)
+                        """, "Mesmo dia LTDA", "44556677000199", 0))
+                .as("zero is the floor, and the floor is inclusive")
+                .doesNotThrowAnyException();
+    }
+
+    /**
+     * Ticket 7's other half: a product may name its supplier, and the FK
+     * refuses a supplier that does not exist. RESTRICT (never CASCADE) is
+     * the same choice category_id made — retiring a party is a status flip,
+     * so history can never lose the row it points at.
+     */
+    @Test
+    void aProductMayNameItsSupplierAndTheForeignKeyRefusesAnUnknownOne() {
+        // SKUs are canonical form (V5): trimmed and lowercase. These inserts
+        // bypass the entity that would have canonicalized them, so the
+        // fixtures spell them the way the CHECK demands — otherwise this test
+        // would be refusing the spelling, not the foreign key.
+        var category = jdbc.queryForObject(
+                "insert into categories (name) values ('Fornecedores FK') returning id",
+                Long.class);
+        var supplier = jdbc.queryForObject(
+                "insert into suppliers (name, document) values ('Aurora FK', '11111111000191') returning id",
+                Long.class);
+
+        assertThatCode(() -> jdbc.update("""
+                        insert into products (sku, name, price, category_id, supplier_id)
+                        values (?, ?, ?, ?, ?)
+                        """, "cafe-fk", "Com fornecedor", 10, category, supplier))
+                .as("the column accepts a supplier that exists")
+                .doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> jdbc.update("""
+                        insert into products (sku, name, price, category_id, supplier_id)
+                        values (?, ?, ?, ?, ?)
+                        """, "cafe-fk-orfao", "Fornecedor inventado", 10, category, 999_999L))
+                .as("and refuses one that does not")
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

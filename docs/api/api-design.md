@@ -19,14 +19,25 @@ auth:       POST /api/auth/login  POST /api/auth/logout  GET /api/auth/me
             PUT /api/auth/password (needs current password)
 users:      CRUD (ADMIN) + PUT /users/{id}/status
 categories: CRUD (ADMIN) + PUT /categories/{id}/status — list open to any signed-in role; name 1–120 chars, unique ignoring case
-customers / suppliers: CRUD + status + search/filter/pagination
+customers: CRUD + status + search/filter/pagination
+suppliers: CRUD + status + `?search=` (ILIKE on name, and on the document normalized to
+  digits — the punctuated CPF/CNPJ a person types still finds the row stored as digits) +
+  pagination — list open to any signed-in role, writes ADMIN/MANAGER (business-rules §4).
+  document travels in canonical form — digits only, punctuation stripped on the way in —,
+  is unique (409; the sentence quotes the canonical spelling), and must be 11 digits (CPF)
+  or 14 (CNPJ) whose check digits add up (422 — ADR 0017 puts the arithmetic on the
+  entity). email optional and never unique; payment terms optional — omitted means the
+  stored default 30, and the response echoes what was stored.
 products: CRUD + status + `?search=` (ILIKE on name and sku) + pagination — list open to
   any signed-in role, writes ADMIN/MANAGER (business-rules §4). sku unique ignoring case
   (409) and canonicalized on write — trimmed + lowercase, and the response echoes the
   canonical form, not the spelling posted (GLOSSARY "Canonical form"); category required —
   unknown categoryId is a 404; price > 0, cost ≥ 0,
   minimum stock ≥ 0, and money at most two decimal places (422 — the numeric(12,2)
-  column would round a finer value). Supplier link arrives with #7.
+  column would round a finer value). supplierId optional — a product may be listed before
+  anyone has decided who supplies it; an unknown id is a 404 resolved *before* the insert
+  (never a foreign-key 500), and the response echoes supplierId + supplierName (LEFT join,
+  null on both sides when there is none).
 orders:
   GET /api/orders  GET /api/orders/{id}  POST /api/orders
   PUT /api/orders/{id} (draft only)  — no DELETE, ever
@@ -62,8 +73,8 @@ One `@RestControllerAdvice` mapping the `BusinessException` hierarchy to `Proble
 | 400 + `fieldErrors` | DTO shape invalid | price = "abc"; blank category name |
 | 401 / 403 | no/bad token / wrong role | employee posts an adjustment |
 | 404 | unknown id | `/orders/999` |
-| 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name |
-| 422 | business rule refuses | cost < 0; price = 0.001 (cents scale) |
+| 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name; duplicate supplier document |
+| 422 | business rule refuses | cost < 0; price = 0.001 (cents scale); a supplier document that is not a CPF/CNPJ |
 | 500 | unexpected, no stack leak | bug |
 
 Frontend: `fieldErrors` → the field they name; a refusal's `detail` sentence (the 409/422 rows above) → inline where the user was acting; anything else → toast/banner.

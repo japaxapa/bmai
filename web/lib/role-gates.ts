@@ -20,8 +20,10 @@ export const ROLE_GATES: readonly {
 }[] = [
   { prefix: "/finance", roles: ["ADMIN", "MANAGER"] },
   { prefix: "/users", roles: ["ADMIN"] },
-  // /categories is unlisted on purpose: any signed-in role may read the
-  // category vocabulary (business-rules §4), writes are ADMIN via @PreAuthorize.
+  // /categories and /suppliers are unlisted on purpose: any signed-in role
+  // may read those vocabularies (business-rules §4) — the supplier list is
+  // also what the product form's dropdown reads —, writes are ADMIN/MANAGER
+  // via @PreAuthorize.
 ];
 
 /**

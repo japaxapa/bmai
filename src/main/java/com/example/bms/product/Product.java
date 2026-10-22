@@ -24,6 +24,7 @@ public record Product(
         int minimumStock,
         int stock,
         long categoryId,
+        Long supplierId,
         boolean active) {
 
     /**
@@ -78,7 +79,7 @@ public record Product(
     /** The status flip (api-design: PUT /{resource}/{id}/status with {active}). */
     public Product withActive(boolean active) {
         return new Product(id, sku, name, description, price, cost,
-                minimumStock, stock, categoryId, active);
+                minimumStock, stock, categoryId, supplierId, active);
     }
 
     /**
@@ -89,6 +90,6 @@ public record Product(
      */
     public Product withId(long id) {
         return new Product(id, sku, name, description, price, cost,
-                minimumStock, stock, categoryId, active);
+                minimumStock, stock, categoryId, supplierId, active);
     }
 }

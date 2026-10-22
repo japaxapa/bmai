@@ -41,6 +41,9 @@ build/
 /lessons/
 /reference/
 /assets/*
-# The web-shell screenshot is project material (README references it), unlike
-# the local lesson artifacts beside it — keep it committed.
+# The README screenshots are project material (the README references them),
+# unlike the local lesson artifacts beside them — keep them committed.
 !/assets/web-shell.png
+!/assets/categories.png
+!/assets/products.png
+!/assets/suppliers.png

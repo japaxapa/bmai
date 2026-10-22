@@ -2,6 +2,7 @@ package com.example.bms.product;
 
 import com.example.bms.shared.PageWindow;
 import com.example.bms.shared.PagedEnvelope;
+import com.example.bms.supplier.SupplierService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -22,10 +23,13 @@ public class ProductService {
 
     private final ProductRepository products;
     private final CategoryRepository categories;
+    private final SupplierService suppliers;
 
-    public ProductService(ProductRepository products, CategoryRepository categories) {
+    public ProductService(ProductRepository products, CategoryRepository categories,
+                          SupplierService suppliers) {
         this.products = products;
         this.categories = categories;
+        this.suppliers = suppliers;
     }
 
     /**
@@ -65,8 +69,29 @@ public class ProductService {
     public ProductResponse create(ProductRequest request) {
         var category = categories.findById(request.categoryId())
                 .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
+        // Both links resolve before anything is written, so an unknown id is a
+        // 404 rather than a foreign-key 500 — and no row is stored behind the
+        // refusal. The order matters: resolving after the insert would let the
+        // write happen first and only then fail.
+        var supplierName = supplierNameOf(request.supplierId());
         var stored = store(build(request, 0, 0, true));
-        return responseOf(new ProductWithCategory(stored, category.name()));
+        return responseOf(new ProductRow(stored, category.name(), supplierName));
+    }
+
+    /**
+     * The supplier name behind an optional id. Null (or absent) means "no
+     * supplier yet" and stays null; an id nobody answers for is the supplier
+     * feature's own 404, exactly like the required category above — the link
+     * is a real reference either way, so it must not fall through to a
+     * foreign-key 500 leaking SQL to the caller. The resolution itself lives
+     * on {@link SupplierService#findName} (architecture §1: a feature's reads
+     * are reached through its public service, never its repository).
+     */
+    private String supplierNameOf(Long supplierId) {
+        if (supplierId == null) {
+            return null;
+        }
+        return suppliers.findName(supplierId);
     }
 
     /**
@@ -98,7 +123,7 @@ public class ProductService {
                 request.price(),
                 request.cost() == null ? BigDecimal.ZERO : request.cost(),
                 request.minimumStock() == null ? 0 : request.minimumStock(),
-                stock, request.categoryId(), active);
+                stock, request.categoryId(), request.supplierId(), active);
     }
 
     /**
@@ -114,9 +139,13 @@ public class ProductService {
                 .orElseThrow(() -> new ProductNotFoundException(id));
         var category = categories.findById(request.categoryId())
                 .orElseThrow(() -> new CategoryNotFoundException(request.categoryId()));
+        // Same order as create above: the link resolves before anything is written, so
+        // an unknown id is a 404 rather than the foreign-key 500 V6's constraint would
+        // raise inside the UPDATE.
+        var supplierName = supplierNameOf(request.supplierId());
         var current = existing.product();
         var stored = store(build(request, current.id(), current.stock(), current.active()));
-        return responseOf(new ProductWithCategory(stored, category.name()));
+        return responseOf(new ProductRow(stored, category.name(), supplierName));
     }
 
     /**
@@ -130,15 +159,20 @@ public class ProductService {
         var existing = products.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException(id));
         var stored = store(existing.product().withActive(active));
-        return responseOf(new ProductWithCategory(stored, existing.categoryName()));
+        // The status verb takes no body beyond {active}, so the names are the
+        // ones already resolved on the loaded row — no re-resolution, and no
+        // way for the flip to blank a link.
+        return responseOf(new ProductRow(
+                stored, existing.categoryName(), existing.supplierName()));
     }
 
-    /** Entity + resolved category name → API response, in one place. */
-    static ProductResponse responseOf(ProductWithCategory row) {
+    /** Entity + resolved names → API response, in one place. */
+    static ProductResponse responseOf(ProductRow row) {
         var product = row.product();
         return new ProductResponse(
                 product.id(), product.sku(), product.name(), product.description(),
                 product.price(), product.cost(), product.minimumStock(), product.stock(),
-                product.categoryId(), row.categoryName(), product.active());
+                product.categoryId(), row.categoryName(),
+                product.supplierId(), row.supplierName(), product.active());
     }
 }

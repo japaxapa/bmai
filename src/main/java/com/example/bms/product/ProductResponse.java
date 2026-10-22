@@ -20,5 +20,7 @@ public record ProductResponse(
         int stock,
         long categoryId,
         String categoryName,
+        Long supplierId,
+        String supplierName,
         boolean active) {
 }

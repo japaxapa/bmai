@@ -21,10 +21,21 @@ export type Product = {
   stock: number;
   categoryId: number;
   categoryName: string;
+  /**
+   * The optional supplier link (#7): null on both sides when a product has
+   * none — the id an edit posts back, the name the row displays, and no
+   * second request to join them (same pair the category travels as).
+   */
+  supplierId: number | null;
+  supplierName: string | null;
   active: boolean;
 };
 
-/** What the write DTO takes (create and edit share the whole shape). */
+/**
+ * What the write DTO takes (create and edit share the whole shape).
+ * `supplierId` is optional: a product is born supplier-less, and an omitted
+ * id is "no supplier" — never a sentinel number to filter out.
+ */
 export type ProductBody = {
   sku: string;
   name: string;
@@ -33,6 +44,7 @@ export type ProductBody = {
   cost?: number;
   minimumStock?: number;
   categoryId: number;
+  supplierId?: number;
 };
 
 export const PRODUCTS_KEY = ["products"] as const;

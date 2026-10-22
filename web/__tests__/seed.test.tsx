@@ -7,6 +7,7 @@ import { sessionInit } from "@/lib/api/server";
 import { seedTable } from "@/lib/api/seed";
 import { categoriesQuery } from "@/features/categories/api";
 import { productsQuery } from "@/features/products/api";
+import { suppliersQuery } from "@/features/suppliers/api";
 import { DEFAULT_API_BASE_URL } from "@/lib/api/base-url";
 import { makeEnvelope } from "@/test/envelope";
 import { server } from "@/test/server";
@@ -14,6 +15,7 @@ import { AppProviders } from "@/providers";
 import { CategoriesPanel } from "@/app/(dashboard)/categories/_components/categories-panel";
 import { ProductsPanel } from "@/app/(dashboard)/products/_components/products-panel";
 import { productsSeedQuery } from "@/app/(dashboard)/products/page";
+import { suppliersSeedQuery } from "@/app/(dashboard)/suppliers/page";
 
 // jsdom never mounts the app router: the island's usePageParam() would blow
 // up without this double (same double categories.test.tsx installs).
@@ -264,10 +266,13 @@ describe("server seed", () => {
           ),
         );
       }),
-      // The island's category dropdown fetches too — its handler must not
-      // fall through to the erroring default.
+      // The island's category and supplier dropdowns fetch too — their
+      // handlers must not fall through to the erroring default.
       http.get(`${DEFAULT_API_BASE_URL}/api/categories`, () =>
         HttpResponse.json(makeEnvelope([{ id: 1, name: "Padaria", active: true }])),
+      ),
+      http.get(`${DEFAULT_API_BASE_URL}/api/suppliers`, () =>
+        HttpResponse.json(makeEnvelope([])),
       ),
     );
     session.cookie = "seed-token";
@@ -297,4 +302,37 @@ describe("server seed", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(gets).toBe(1);
   });
+
+  // The same parse-parity claim for suppliers (#7): the page's factory reads
+  // the term through paramFromSearchParams, the island reads it through
+  // useSearchParam, and the two must land on one key — the dehydrated entry
+  // the island will actually look for.
+  const supplierSearchCases: Array<
+    [name: string, expected: string, searchParams: Record<string, string | string[] | undefined>]
+  > = [
+    ["no search param", "", {}],
+    ["?search=acme", "acme", { search: "acme" }],
+    ["repeated ?search=a&search=b", "a", { search: ["a", "b"] }],
+  ];
+  test.each(supplierSearchCases)(
+    "suppliers seed reads %s as search %j",
+    async (_case, expected, searchParams) => {
+      const requested: (string | null)[] = [];
+      server.use(
+        http.get(`${DEFAULT_API_BASE_URL}/api/suppliers`, ({ request }) => {
+          requested.push(new URL(request.url).searchParams.get("search"));
+          return HttpResponse.json(makeEnvelope([]));
+        }),
+      );
+
+      const state = await seedTable(suppliersSeedQuery(searchParams), searchParams);
+
+      // An empty term is no filter at all (api-design), so the wire carries
+      // nothing; any other term rides verbatim.
+      expect(requested).toEqual([expected === "" ? null : expected]);
+      // Key-addressed (ADR 0020): the dehydrated entry sits exactly where
+      // the island will look for it — same factory, same term.
+      expect(state.queries[0].queryKey).toEqual(suppliersQuery(0, expected).queryKey);
+    },
+  );
 });

@@ -1,6 +1,7 @@
 package com.example.bms.product;
 
 import com.example.bms.auth.AuthCookie;
+import com.example.bms.supplier.CheckDigits;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -305,6 +306,149 @@ class ProductEndToEndTest {
         assertThat(skusIn(field(found.getBody(), "$.items")))
                 .as("and every one of them is on the page")
                 .hasSize(3);
+    }
+
+    /**
+     * Ticket 7's product link, through the real stack: V6's nullable column,
+     * the FK, and the LEFT join that resolves the supplier's *name* for the
+     * row. Two things a stubbed slice cannot prove: a product with no
+     * supplier still appears in the list (an inner join would hide it), and
+     * the null link arrives as null rather than as a sentinel number the UI
+     * would have to know to filter out.
+     */
+    @Test
+    void aProductListsWithItsSupplierNameAndWithoutOneItStillAppears() {
+        var cookie = adminCookie();
+        var categoryId = createCategoryNamed(uniqueName("Fornecedores"), cookie);
+        var supplierName = "Aurora " + sequence.incrementAndGet();
+        var supplierId = createSupplierNamed(supplierName, cookie);
+        var withSupplier = uniqueSku("COM-FORNECEDOR");
+        var withoutSupplier = uniqueSku("SEM-FORNECEDOR");
+
+        var created = post("/api/products", Map.of(
+                "sku", withSupplier, "name", "Café com fornecedor",
+                "price", "24.90", "categoryId", categoryId,
+                "supplierId", supplierId), cookie);
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        assertThat(((Number) field(created.getBody(), "$.supplierId")).longValue())
+                .as("the link round-trips as the id that was posted")
+                .isEqualTo(supplierId);
+        assertThat(field(created.getBody(), "$.supplierName"))
+                .as("and the UI renders the name, so the API resolves it")
+                .isEqualTo(supplierName);
+
+        var listed = get("/api/products", cookie);
+        assertThat(itemSkued(listed.getBody(), withSupplier.toLowerCase()))
+                .as("the LEFT join carries the supplier's name into the list")
+                .isNotNull();
+
+        var unlinked = post("/api/products", Map.of(
+                "sku", withoutSupplier, "name", "Café sem fornecedor",
+                "price", "19.90", "categoryId", categoryId), cookie);
+        assertThat(unlinked.getStatusCode().value())
+                .as("the link is optional — a product may be listed before anyone "
+                        + "decides who supplies it")
+                .isEqualTo(201);
+        assertThat(field(unlinked.getBody(), "$.supplierId"))
+                .as("null, not a sentinel the UI would have to filter out")
+                .isNull();
+        assertThat(field(unlinked.getBody(), "$.supplierName"))
+                .as("and the name that would have resolved from it")
+                .isNull();
+
+        assertThat(itemSkued(get("/api/products", cookie).getBody(), withoutSupplier.toLowerCase()))
+                .as("a product with no supplier is still a product: the join must not "
+                        + "make it invisible in the list")
+                .isNotNull();
+    }
+
+    /**
+     * The supplier link is a real reference, so an unknown id answers the
+     * same 404 the category does — not a 500 whose body leaks the SQL to
+     * whoever posted it.
+     */
+    @Test
+    void anUnknownSupplierOnCreateIsA404AndStoresNothing() {
+        var cookie = adminCookie();
+        var categoryId = createCategoryNamed(uniqueName("Fornecedor-404"), cookie);
+        var sku = uniqueSku("FORNECEDOR-404");
+
+        var refused = post("/api/products", Map.of(
+                "sku", sku, "name", "Fornecedor inventado",
+                "price", "10.00", "categoryId", categoryId,
+                "supplierId", 999_999L), cookie);
+
+        assertThat(refused.getStatusCode().value()).isEqualTo(404);
+        assertThat(refused.getHeaders().getContentType().toString())
+                .as("RFC 9457 body, same shape as every other refusal")
+                .contains("problem+json");
+        assertThat(field(refused.getBody(), "$.status")).isEqualTo(404);
+        assertThat(skusIn(field(get("/api/products?search=" + sku, cookie).getBody(), "$.items")))
+                .as("and nothing was stored behind the refusal")
+                .isEmpty();
+    }
+
+    /**
+     * The edit half of the same rule, and the half only this seam can pin:
+     * {@code edit} must resolve the supplier *before* {@code store(...)}.
+     * Resolving after it trips V6's foreign key inside the UPDATE and answers
+     * an untranslated 500 instead of the documented 404 — the row survives
+     * only because the transaction rolled back, which no assertion at the
+     * HTTP seam would otherwise notice.
+     */
+    @Test
+    void anUnknownSupplierOnEditIsA404AndChangesNothing() {
+        var cookie = adminCookie();
+        var categoryId = createCategoryNamed(uniqueName("Fornecedor-404-edit"), cookie);
+        var sku = uniqueSku("FORNECEDOR-404-EDIT");
+        var created = post("/api/products", Map.of(
+                "sku", sku, "name", "Café fiel", "price", "10.00",
+                "categoryId", categoryId), cookie);
+        var id = (Number) field(created.getBody(), "$.id");
+
+        var refused = put("/api/products/" + id, Map.of(
+                "sku", sku, "name", "Café trocado", "price", "99.00",
+                "categoryId", categoryId, "supplierId", 999_999L), cookie);
+
+        assertThat(refused.getStatusCode().value())
+                .as("the unknown id is a 404 resolved before the write, exactly as on create")
+                .isEqualTo(404);
+        assertThat(refused.getHeaders().getContentType().toString())
+                .as("RFC 9457 body, same shape as every other refusal")
+                .contains("problem+json");
+        assertThat(field(refused.getBody(), "$.status")).isEqualTo(404);
+        var row = itemSkued(get("/api/products?search=" + sku, cookie).getBody(), sku.toLowerCase());
+        assertThat(row).isNotNull();
+        assertThat(row.get("name"))
+                .as("and the refusal came before the UPDATE — the stored row is untouched")
+                .isEqualTo("Café fiel");
+        assertThat(row.get("price")).isEqualTo(10.00);
+    }
+
+    /** Creates a supplier through its own API and answers its id. */
+    private long createSupplierNamed(String name, String cookie) {
+        var response = post("/api/suppliers", Map.of(
+                "name", name, "document", uniqueDocument()), cookie);
+        assertThat(response.getStatusCode().value()).isEqualTo(201);
+        return ((Number) field(response.getBody(), "$.id")).longValue();
+    }
+
+    /**
+     * A 14-digit CNPJ whose check digits the domain will accept: an 12-digit
+     * body padded from the counter (unique per invocation), then the two
+     * modulus-11 digits that body implies — computed by
+     * {@link CheckDigits#cnpjWithCheckDigits}, the very rule the domain
+     * judges with, so there is one copy of the arithmetic in the repo rather
+     * than a production copy and a test copy that must be kept in step.
+     * Computed rather than hardcoded — a fixture table would go stale the
+     * moment a test wanted a second supplier.
+     */
+    private String uniqueDocument() {
+        var body = "%d".formatted(sequence.incrementAndGet() % 10_000_000_000L);
+        if (body.length() < 12) {
+            body = "0".repeat(12 - body.length()) + body;
+        }
+        return CheckDigits.cnpjWithCheckDigits(body);
     }
 
     /** Creates a category through its own API and answers its id. */

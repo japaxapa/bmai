@@ -21,6 +21,11 @@ import java.math.BigDecimal;
  * it to the service as one typed value instead of seven loose
  * primitives (review S6 — a silent reorder of same-typed primitives
  * compiles across a 7-arg call).
+ *
+ * <p>{@code supplierId} is optional (ticket 7): a product may be listed
+ * before anyone has decided who supplies it, and "no supplier" is an
+ * absent id rather than a sentinel number the UI would have to know to
+ * filter out.
  */
 public record ProductRequest(
         @NotBlank(message = "SKU is required.")
@@ -33,5 +38,6 @@ public record ProductRequest(
         BigDecimal cost,
         Integer minimumStock,
         @NotNull(message = "A category is required.")
-        Long categoryId) {
+        Long categoryId,
+        Long supplierId) {
 }

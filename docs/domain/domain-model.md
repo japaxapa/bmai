@@ -5,7 +5,7 @@ Single context (one `GLOSSARY.md` at root). Aggregates, states, and invariants b
 ## Aggregates
 
 - **Customer** — profile + `paymentTermsDays` (default 30) + status. Referenced by orders/invoices; never cascade-deleted.
-- **Supplier** — mirror of customer on the buy side; `paymentTermsDays` default 30.
+- **Supplier** — mirror of customer on the buy side; document (CPF/CNPJ, canonical digits, check digits, unique); `paymentTermsDays` default 30.
 - **Category** — ADMIN vocabulary; product requires one.
 - **Product** — sku (unique), price (>0), cost (weighted avg), stock mirror, minimumStock (advisory), category, supplier, status.
 - **Sales order (+ items)** — customer, items (product, qty, `unitPrice` locked at CONFIRMED, `unitCost` written at PROCESSING), total (computed). States: DRAFT, CONFIRMED, PROCESSING, COMPLETED, CANCELLED, RETURNED.
