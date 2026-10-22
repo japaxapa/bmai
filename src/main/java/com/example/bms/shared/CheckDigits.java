@@ -1,12 +1,15 @@
-package com.example.bms.supplier;
+package com.example.bms.shared;
 
 import java.util.function.IntUnaryOperator;
 
 /**
- * The CPF/CNPJ verification-digit rule (GLOSSARY "CPF/CNPJ-style document"),
- * in one place so the side that <em>judges</em> and the side that
- * <em>generates</em> fixtures can never drift apart — "one rule, both sides"
- * as a structural fact rather than a comment about two copies staying in sync.
+ * The CPF/CNPJ verification-digit rule (GLOSSARY "Document"), in one place
+ * so the side that <em>judges</em> and the side that <em>generates</em>
+ * fixtures can never drift apart — "one rule, both sides" as a structural
+ * fact rather than a comment about two copies staying in sync. It lives in
+ * {@code shared} because the rule belongs to no single party feature: the
+ * customer and the supplier are the two faces of the same GLOSSARY concept,
+ * and neither may import the other's internals (ADR 0004).
  *
  * <p>Both documents are modulus-11: a weighted sum of the digits,
  * {@code r = sum % 11}, and the digit is {@code r < 2 ? 0 : 11 - r} — CPF over
@@ -15,15 +18,16 @@ import java.util.function.IntUnaryOperator;
  *
  * <p>Deliberately pure code, not a database CHECK: a checksum is arithmetic,
  * not a constraint Postgres can express without a function — and the judgement
- * still runs on {@link Supplier}'s constructor (ADR 0017), so every write path
- * funnels through it. This class is the arithmetic; the entity owns what
- * happens when the arithmetic says no.
+ * still runs on each party entity's constructor (ADR 0017: {@code Supplier}
+ * and {@code Customer}), so every write path funnels through it. This class
+ * is the arithmetic; the entity owns what happens when the arithmetic says no.
  *
  * <p>The generator half exists because a fixture needs a <em>fresh</em> valid
- * document per invocation (V6's unique index refuses reuse) and a hardcoded
- * table would go stale the moment a test wanted a second supplier. It is not
- * a production write path: production never invents a party's document — the
- * generator serves the tests, which is why this class is the seam they share.
+ * document per invocation (each party table's unique index refuses reuse) and
+ * a hardcoded table would go stale the moment a test wanted a second row. It
+ * is not a production write path: production never invents a party's document
+ * — the generator serves the tests, which is why this class is the seam they
+ * share.
  */
 public final class CheckDigits {
 

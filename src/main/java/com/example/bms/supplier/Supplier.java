@@ -1,5 +1,7 @@
 package com.example.bms.supplier;
 
+import com.example.bms.shared.CheckDigits;
+
 /**
  * A supplier row (GLOSSARY Supplier): a business that sells products to us for
  * resale — the counterpart of the customer on the buy side. Immutable, like
