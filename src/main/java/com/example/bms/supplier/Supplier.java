@@ -51,9 +51,11 @@ public record Supplier(
      * locale-sensitive transform (the digits are the same in every locale, and
      * {@code lower()} on a CPF would be meaningless anyway) — this is the
      * trimming half of "Canonical form", applied to a field whose only
-     * readable spelling is the digit string itself.
+     * readable spelling is the digit string itself. Package-visible so the
+     * repository's search applies this identical stripping rather than a copy
+     * of the regex.
      */
-    private static String canonicalDocument(String document) {
+    static String canonicalDocument(String document) {
         return document.replaceAll("\\D", "");
     }
 

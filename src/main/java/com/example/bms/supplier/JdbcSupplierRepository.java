@@ -129,13 +129,13 @@ public class JdbcSupplierRepository implements SupplierRepository {
     }
 
     /**
-     * The same digit-stripping the entity applies, so a search for
-     * {@code 11.222.333/0001-81} finds the row stored as
-     * {@code 11222333000181}. Never null — {@code digitsOf(null)} is an
-     * empty string, and {@link #likeTerm} turns that into "no filter" just
-     * as it does for a blank name term.
+     * The entity's own digit-stripping, delegated ({@link Supplier#canonicalDocument}),
+     * so a search for {@code 11.222.333/0001-81} finds the row stored as
+     * {@code 11222333000181} by construction. Never null —
+     * {@code digitsOf(null)} is an empty string, and {@link #likeTerm} turns
+     * that into "no filter" just as it does for a blank name term.
      */
     private static String digitsOf(String search) {
-        return search == null ? "" : search.replaceAll("\\D", "");
+        return search == null ? "" : Supplier.canonicalDocument(search);
     }
 }
