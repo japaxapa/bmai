@@ -34,6 +34,7 @@ public record Customer(
         boolean active) {
 
     public Customer {
+        name = name.trim();
         document = canonicalDocument(document);
         if (document.length() != 11 && document.length() != 14) {
             throw new InvalidCustomerException(

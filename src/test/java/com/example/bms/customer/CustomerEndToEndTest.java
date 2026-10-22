@@ -109,6 +109,31 @@ class CustomerEndToEndTest {
     }
 
     /**
+     * V5 (GLOSSARY "Canonical form"): a unique text field is stored trimmed —
+     * padding would invent a second row the person cannot tell apart from the
+     * first. The entity is the invariant's home (ADR 0017), and the customer
+     * must trim the same way {@code Supplier} already does: the two parties
+     * are one shape, so the same padded name cannot store two ways.
+     */
+    @Test
+    void paddedNameIsStoredTrimmed() {
+        var cookie = adminCookie();
+
+        var created = post("/api/customers", Map.of(
+                "name", "  Mercado Sobrado ME  ",
+                "document", CheckDigits.cnpjWithCheckDigits("334445550001")), cookie);
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+        assertThat(field(created.getBody(), "$.name"))
+                .as("the API echoes what it stored, padding gone")
+                .isEqualTo("Mercado Sobrado ME");
+
+        var listed = get("/api/customers", cookie);
+        assertThat(namesIn(field(listed.getBody(), "$.items")))
+                .as("and the list shows the same trimmed spelling")
+                .contains("Mercado Sobrado ME");
+    }
+
+    /**
      * AC: "Constraint violations return 409/422 rendered inline in the UI" —
      * 409, not 422: the row exists and conflicts (api-design errors table),
      * rather than the payload being semantically wrong.
