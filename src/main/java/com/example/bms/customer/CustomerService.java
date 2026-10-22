@@ -75,4 +75,49 @@ public class CustomerService {
                 true));
         return responseOf(stored);
     }
+
+    /**
+     * Edit: load, refuse the unknown id as a 404 (api-design errors table)
+     * rather than letting it fall through to a 500 or an insert, and rebuild
+     * the row keeping the fields no form writes — {@code active} (status is
+     * its own verb) and the id. The whole shape is required, so an edit
+     * cannot silently blank a field the caller simply left out of the body.
+     *
+     * <p>Same gate as create (business-rules §4 row "Create/edit customer"):
+     * EMPLOYEE carries the edit too.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
+    @Transactional
+    public CustomerResponse edit(long id, CustomerRequest request) {
+        var existing = customers.findById(id)
+                .orElseThrow(() -> new CustomerNotFoundException(id));
+        var stored = customers.save(new Customer(
+                existing.id(),
+                request.name(),
+                request.document(),
+                request.email(),
+                request.paymentTermsDays() == null ? existing.paymentTermsDays()
+                        : request.paymentTermsDays(),
+                existing.active()));
+        return responseOf(stored);
+    }
+
+    /**
+     * The ticket's "change status", as a deactivation rather than a delete:
+     * sales orders and invoices point at customers, so retiring one has to
+     * leave it in history (GLOSSARY "Deactivated").
+     *
+     * <p>And the one write EMPLOYEE does <em>not</em> carry
+     * (business-rules §4: "Deactivate customer" is ADMIN/MANAGER): the clerk
+     * registers and edits the walk-in party, but retiring a customer is a
+     * supervisor's call.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @Transactional
+    public CustomerResponse changeStatus(long id, boolean active) {
+        var existing = customers.findById(id)
+                .orElseThrow(() -> new CustomerNotFoundException(id));
+        var stored = customers.save(existing.withActive(active));
+        return responseOf(stored);
+    }
 }

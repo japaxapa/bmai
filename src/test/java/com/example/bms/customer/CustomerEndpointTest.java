@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -69,6 +70,11 @@ class CustomerEndpointTest {
                 @Override
                 public long count(String search) {
                     return matching(search).size();
+                }
+
+                @Override
+                public java.util.Optional<Customer> findById(long id) {
+                    return java.util.Optional.ofNullable(rows.get(id));
                 }
 
                 @Override
@@ -169,6 +175,198 @@ class CustomerEndpointTest {
                 .andExpect(jsonPath("$.status").value(422))
                 .andExpect(jsonPath("$.detail")
                         .value("Document must be 11 digits (CPF) or 14 digits (CNPJ)."));
+    }
+
+    /**
+     * The domain's own refusal, in Product's exact shape ("Minimum stock
+     * cannot be negative."): payment terms are a business range (≥ 0 days),
+     * not DTO shape, so the entity judges (ADR 0017) and the advice layer
+     * answers 422 with the sentence the UI renders inline. Without the guard
+     * a negative value answers V7's CHECK — an unhandled 500 with no sentence
+     * for any channel to render.
+     */
+    @Test
+    void negativePaymentTermsAreRefusedAs422() throws Exception {
+        mvc.perform(post("/api/customers").with(user("clerk").roles("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Prazo impossível ME","document":"11.222.333/0001-81",
+                                 "paymentTermsDays":-5}
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("Payment terms cannot be negative."));
+    }
+
+    /**
+     * api-design: customers carry {@code ?search=} (search/filter/
+     * pagination). This slice pins the wiring (URL → service → boundary,
+     * term intact); the real case-insensitive match against Postgres is seam
+     * B's job. The stub filters on name and document the way the SQL will —
+     * party search matches the two columns a person would type from: the
+     * trading name and the CPF/CNPJ digits.
+     */
+    @Test
+    void searchNarrowsTheListToTheMatchingRows() throws Exception {
+        mvc.perform(get("/api/customers?search=mercado").with(user("clerk").roles("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                // Row 7 by id — a sibling test renames it in this shared
+                // store, so the *name* can only be pinned by what survives
+                // the rename.
+                .andExpect(jsonPath("$.items[0].id").value(7))
+                .andExpect(jsonPath("$.items[0].name", org.hamcrest.Matchers.containsString("Mercado")))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    /**
+     * The second column the predicate covers: a person searching a customer
+     * types the CPF/CNPJ digits as readily as the trading name, and the
+     * canonical form means the digits on the wire are the digits stored.
+     */
+    @Test
+    void searchAlsoMatchesTheDocumentDigits() throws Exception {
+        mvc.perform(get("/api/customers?search=12345678909")
+                        .with(user("clerk").roles("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                // The document, not the name: a sibling test renames row 7 in
+                // this shared store — so this assertion holds in any order.
+                .andExpect(jsonPath("$.items[0].document").value("12345678909"))
+                .andExpect(jsonPath("$.total").value(1));
+    }
+
+    /** A blank term is no filter — the list is the whole list. */
+    @Test
+    void blankSearchMeansNoFilter() throws Exception {
+        mvc.perform(get("/api/customers?search=").with(user("clerk").roles("EMPLOYEE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.total").value(2));
+    }
+
+    /**
+     * api-design errors table: "404 | unknown id". A stale row (edited in
+     * another tab) must not become a 500 or an empty 404 — the UI toasts the
+     * same envelope it gets everywhere else. (A pinning test: the edit path
+     * already answers the unknown id this way.)
+     */
+    @Test
+    void unknownCustomerIsA404ProblemJson() throws Exception {
+        mvc.perform(put("/api/customers/999").with(user("clerk").roles("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Ghost","document":"11.222.333/0001-81"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    /**
+     * api-design: the deactivation convention every collection follows —
+     * {@code PUT /{resource}/{id}/status} with {@code {active}}, answered 200
+     * with the updated row (same shape as edit, so the UI has one path).
+     * Deactivation, never deletion (GLOSSARY "Deactivated"): sales orders
+     * reference customers, so a retired row stays, marked.
+     */
+    @Test
+    void statusEndpointTurnsACustomerOffAndAnswersWithIt() throws Exception {
+        // Row 8, not row 7: the store is shared across this class, and row 7
+        // is the one the edit test asserts `active` true on — flipping it
+        // here would make that test depend on the method order.
+        mvc.perform(put("/api/customers/8/status").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(8))
+                // The row's other fields ride through untouched — only the
+                // status verb may change the status.
+                .andExpect(jsonPath("$.document").value("12345678909"))
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
+    /**
+     * The customers-specific cell of business-rules §4: unlike create/edit
+     * (which EMPLOYEE carries), the deactivation is ADMIN/MANAGER only. The
+     * refusal carries a body: the frontend renders 403s as a toast
+     * (frontend-architecture §Forms) and a toast with no sentence has nothing
+     * to say.
+     */
+    @Test
+    void employeeCannotChangeACustomerStatus() throws Exception {
+        mvc.perform(put("/api/customers/7/status").with(user("clerk").roles("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\":false}"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    /**
+     * The other half of the matrix: MANAGER genuinely carries the write — a
+     * bare {@code hasAnyRole('ADMIN','EMPLOYEE')} would fail here, and the
+     * create gate is the one cell nothing else pins.
+     */
+    @Test
+    void managerMayCreateACustomer() throws Exception {
+        mvc.perform(post("/api/customers").with(user("supervisor").roles("MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Torrefação Sul ME","document":"11.222.333/0001-81"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Torrefação Sul ME"));
+    }
+
+    /**
+     * Edit posts the whole shape (the same DTO create takes — one record
+     * holds the field rules, so create cannot drift from edit), answers 200
+     * with the stored row, and the fields no form writes ride along
+     * untouched: {@code active} (status is its own verb) and {@code id}.
+     */
+    @Test
+    void adminEditAnswersWithTheUpdatedCustomer() throws Exception {
+        mvc.perform(put("/api/customers/7").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Mercado Rio Doce e São Jorge ME","document":"11.222.333/0001-81",
+                                 "email":"novas@riodoce.com.br","paymentTermsDays":45}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.name").value("Mercado Rio Doce e São Jorge ME"))
+                .andExpect(jsonPath("$.document").value("11222333000181"))
+                .andExpect(jsonPath("$.email").value("novas@riodoce.com.br"))
+                .andExpect(jsonPath("$.paymentTermsDays").value(45))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+
+    /**
+     * The shape rule the category and supplier fields already carry, byte for
+     * byte ({@code @Size}): name tops out at 120, V7's
+     * {@code customers_name_length} CHECK included. Answered 400 *naming the
+     * field* — the refusal router (lib/api/refusal.ts) prints fieldErrors on
+     * the field itself, so the form shows the sentence under the Name box
+     * rather than as a generic banner. Without the annotation the 121st
+     * character sails past every DTO rule and Postgres answers first — as an
+     * unhandled 500, no field named and no sentence to show.
+     */
+    @Test
+    void overlongNameIsRefusedAsA400NamingTheField() throws Exception {
+        mvc.perform(post("/api/customers").with(user("clerk").roles("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + "x".repeat(121)
+                                + "\",\"document\":\"11.222.333/0001-81\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.fieldErrors.name[0]")
+                        .value("Name must be at most 120 characters."));
     }
 
     /**

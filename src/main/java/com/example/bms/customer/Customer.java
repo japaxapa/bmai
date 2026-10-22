@@ -17,11 +17,13 @@ import com.example.bms.shared.CheckDigits;
  * <p>The judgements run in the constructor — the invariant's home (ADR 0017)
  * — each answered as the 422 {@link InvalidCustomerException} rather than
  * whatever V7 would answer: an unhandled 500 leaking SQL to the caller. The
- * length half is refused here (a modulus-11 checksum is arithmetic, not a
- * constraint Postgres can express, so V7 only carries the shape CHECK); the
- * check digits come from the shared {@code CheckDigits}, the one copy of the
- * rule both parties judge with. The CHECKs stay as the backstop for write
- * paths that never pass through the entity (seeds, raw SQL).
+ * document's length is refused here (a modulus-11 checksum is arithmetic,
+ * not a constraint Postgres can express, so V7 only carries the shape CHECK),
+ * the check digits come from the shared {@code CheckDigits} — the one copy of
+ * the rule both parties judge with — and {@code paymentTermsDays} is a
+ * business range (≥ 0 days, business-rules §3), same as the supplier's. The
+ * CHECKs stay as the backstop for write paths that never pass through the
+ * entity (seeds, raw SQL).
  */
 public record Customer(
         long id,
@@ -40,6 +42,9 @@ public record Customer(
         if (!CheckDigits.matches(document)) {
             throw new InvalidCustomerException("Document check digits do not match.");
         }
+        if (paymentTermsDays < 0) {
+            throw new InvalidCustomerException("Payment terms cannot be negative.");
+        }
     }
 
     /**
@@ -57,6 +62,11 @@ public record Customer(
      * database assigned — so the repository never re-lists the fields by hand.
      */
     public Customer withId(long id) {
+        return new Customer(id, name, document, email, paymentTermsDays, active);
+    }
+
+    /** The status flip (api-design: PUT /{resource}/{id}/status with {active}). */
+    public Customer withActive(boolean active) {
         return new Customer(id, name, document, email, paymentTermsDays, active);
     }
 }

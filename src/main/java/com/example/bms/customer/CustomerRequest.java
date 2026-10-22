@@ -1,6 +1,7 @@
 package com.example.bms.customer;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * The write DTO create and edit share — one record holds the field rules, so
@@ -11,11 +12,12 @@ import jakarta.validation.constraints.NotBlank;
  *
  * <p>Document *validity* (CPF/CNPJ length and check digits) is a domain rule,
  * not a shape rule — it lives on the entity, so every write path funnels
- * through it (ADR 0017); the blank refusal below is the opposite: shape,
- * answered here as a 400 naming the field.
+ * through it (ADR 0017); the blank and length refusals below are the
+ * opposite: shape, answered here as a 400 naming the field.
  */
 public record CustomerRequest(
         @NotBlank(message = "Name is required.")
+        @Size(max = 120, message = "Name must be at most 120 characters.")
         String name,
         @NotBlank(message = "Document is required.")
         String document,

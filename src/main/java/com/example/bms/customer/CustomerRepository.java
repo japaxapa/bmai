@@ -1,6 +1,7 @@
 package com.example.bms.customer;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Where customers are read and written — a port over the {@code customers}
@@ -19,6 +20,9 @@ public interface CustomerRepository {
 
     /** Rows matching the search term — the count behind the page envelope. */
     long count(String search);
+
+    /** The row with that id, empty when it does not exist (→ 404). */
+    Optional<Customer> findById(long id);
 
     /** Stores the row and answers it back with the id the database gave it. */
     Customer save(Customer customer);
