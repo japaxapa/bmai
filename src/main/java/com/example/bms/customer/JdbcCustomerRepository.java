@@ -1,5 +1,6 @@
 package com.example.bms.customer;
 
+import com.example.bms.shared.LikeTerm;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -53,8 +54,8 @@ public class JdbcCustomerRepository implements CustomerRepository {
 
     @Override
     public List<Customer> findAll(int page, int size, String search) {
-        var term = likeTerm(search);
-        var documentTerm = likeTerm(digitsOf(search));
+        var term = LikeTerm.of(search);
+        var documentTerm = LikeTerm.of(digitsOf(search));
         // Display order by name: customers have no natural sequence a person
         // would recognise (unlike a SKU), so the list is alphabetical and the
         // id only breaks ties.
@@ -72,8 +73,8 @@ public class JdbcCustomerRepository implements CustomerRepository {
 
     @Override
     public long count(String search) {
-        var term = likeTerm(search);
-        var documentTerm = likeTerm(digitsOf(search));
+        var term = LikeTerm.of(search);
+        var documentTerm = LikeTerm.of(digitsOf(search));
         // Same aliases as findAll's, so SEARCH_PREDICATE reads identically.
         if (term == null) {
             return jdbc.queryForObject("select count(*) from customers", Long.class);
@@ -114,27 +115,12 @@ public class JdbcCustomerRepository implements CustomerRepository {
     }
 
     /**
-     * The ILIKE term for a live search: wildcards the user typed are data,
-     * not syntax — '%' in a search box must find a literal '%', not every
-     * row. Blank (or absent) means no filter.
-     */
-    private static String likeTerm(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return "%" + value.trim()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_") + "%";
-    }
-
-    /**
      * The entity's own digit-stripping, delegated
      * ({@link Customer#canonicalDocument}), so a search for
      * {@code 11.222.333/0001-81} finds the row stored as
      * {@code 11222333000181} by construction. Never null —
-     * {@code digitsOf(null)} is an empty string, and {@link #likeTerm} turns
-     * that into "no filter" just as it does for a blank name term.
+     * {@code digitsOf(null)} is an empty string, and {@link LikeTerm#of}
+     * turns that into "no filter" just as it does for a blank name term.
      */
     private static String digitsOf(String search) {
         return search == null ? "" : Customer.canonicalDocument(search);
