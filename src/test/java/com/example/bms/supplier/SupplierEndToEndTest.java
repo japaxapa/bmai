@@ -297,6 +297,36 @@ class SupplierEndToEndTest {
     }
 
     /**
+     * api-design's search promise, and the cell no other test can carry: the
+     * stored document is canonical digits, but the person types the punctuated
+     * CNPJ in front of them — the term is normalized to digits for the
+     * document column *only* (the name half must match what was typed). The
+     * slice's stub carries no normalization, so this is seam B's by cell
+     * delegation; without this case {@code digitsOf} could vanish and the
+     * suite would stay green while the documented promise broke silently.
+     */
+    @Test
+    void searchingByThePunctuatedSpellingFindsTheRowStoredAsDigits() {
+        var cookie = adminCookie();
+        // A CNPJ no other fixture holds, check digits computed by the very
+        // rule the entity judges with — one copy of the arithmetic (§5).
+        var digits = CheckDigits.cnpjWithCheckDigits("554433221100");
+        var punctuated = digits.substring(0, 2) + "." + digits.substring(2, 5) + "."
+                + digits.substring(5, 8) + "/" + digits.substring(8, 12)
+                + "-" + digits.substring(12);
+        var created = post("/api/suppliers", Map.of(
+                "name", "Busca Pontuada LTDA", "document", punctuated), cookie);
+        assertThat(created.getStatusCode().value()).isEqualTo(201);
+
+        var found = get("/api/suppliers?search=" + punctuated, cookie);
+
+        assertThat(found.getStatusCode().value()).isEqualTo(200);
+        assertThat(namesIn(field(found.getBody(), "$.items")))
+                .as("the punctuated spelling finds the row stored as digits (api-design)")
+                .containsExactly("Busca Pontuada LTDA");
+    }
+
+    /**
      * The seeded admin (V2), logged in as-is: nothing is inserted here, so the
      * journey runs against exactly the account the README documents.
      */
