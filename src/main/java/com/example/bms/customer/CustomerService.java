@@ -2,6 +2,7 @@ package com.example.bms.customer;
 
 import com.example.bms.shared.PageWindow;
 import com.example.bms.shared.PagedEnvelope;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,7 +67,7 @@ public class CustomerService {
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EMPLOYEE')")
     @Transactional
     public CustomerResponse create(CustomerRequest request) {
-        var stored = customers.save(new Customer(
+        var stored = store(new Customer(
                 0,
                 request.name(),
                 request.document(),
@@ -74,6 +75,22 @@ public class CustomerService {
                 request.paymentTermsDays() == null ? 30 : request.paymentTermsDays(),
                 true));
         return responseOf(stored);
+    }
+
+    /**
+     * One write path — create, edit and the status flip. The document refusal
+     * comes from V7's unique index — Postgres says no — and this is only the
+     * translation into the 409 the UI renders inline. Nothing here "checks
+     * first", so two identical POSTs answer identically and an edit cannot
+     * race past the constraint either. The sentence quotes the canonical
+     * form, which is the spelling that actually collided.
+     */
+    private Customer store(Customer customer) {
+        try {
+            return customers.save(customer);
+        } catch (DuplicateKeyException refused) {
+            throw new CustomerConflictException(customer.document());
+        }
     }
 
     /**
@@ -91,7 +108,7 @@ public class CustomerService {
     public CustomerResponse edit(long id, CustomerRequest request) {
         var existing = customers.findById(id)
                 .orElseThrow(() -> new CustomerNotFoundException(id));
-        var stored = customers.save(new Customer(
+        var stored = store(new Customer(
                 existing.id(),
                 request.name(),
                 request.document(),
@@ -117,7 +134,7 @@ public class CustomerService {
     public CustomerResponse changeStatus(long id, boolean active) {
         var existing = customers.findById(id)
                 .orElseThrow(() -> new CustomerNotFoundException(id));
-        var stored = customers.save(existing.withActive(active));
+        var stored = store(existing.withActive(active));
         return responseOf(stored);
     }
 }
