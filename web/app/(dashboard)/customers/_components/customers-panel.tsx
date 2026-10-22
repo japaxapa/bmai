@@ -3,68 +3,27 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
 import { PagedList } from "@/components/shared/paged-list";
 import {
   CUSTOMERS_KEY,
   customersQuery,
   type Customer,
-  type CustomerBody,
 } from "@/features/customers/api";
-import { digitsOnly, formatDocument } from "@/lib/format/document";
-import { optionalNumber } from "@/lib/forms/optional-number";
+import { formatDocument } from "@/lib/format/document";
+import { PARTY_EMPTY, partySchema, partyToBody, type PartyValues } from "@/lib/forms/party";
 import { refusalHandlers } from "@/lib/api/refusal";
 import { writeJson } from "@/lib/api/write";
 import { useAuth } from "@/providers/auth-provider";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { usePageParam } from "@/hooks/use-page-param";
-// Shape courtesy only (frontend-architecture §Forms): zod gates the empty
-// boxes before they reach the API; react-hook-form owns registration, touched
-// state and where the messages land. No CPF/CNPJ judgement here — the length
-// and the check digits are the *domain's* rules (ADR 0017), answered as a
-// 422 whose sentence this form shows inline like any other refusal. The
-// whitespace-only name is deliberately legal for the same reason: the trim
-// (and therefore the "required") is the server's to apply.
-export const customerSchema = z.object({
-  name: z.string().min(1, "Name is required."),
-  document: z.string().min(1, "Document is required."),
-  email: z.string(),
-  paymentTermsDays: optionalNumber("Payment terms"),
-});
-
-type CustomerValues = z.infer<typeof customerSchema>;
-
-const EMPTY: CustomerValues = {
-  name: "",
-  document: "",
-  email: "",
-  paymentTermsDays: "",
-};
-
-/**
- * Form strings → the DTO: the document back to its canonical digits (the mask
- * is presentation — GLOSSARY "Canonical form"), a blank email and blank terms
- * left *out* so the server's own defaults (null, 30) are the ones that apply.
- */
-function toBody(values: CustomerValues): CustomerBody {
-  const email = values.email.trim();
-  return {
-    name: values.name.trim(),
-    document: digitsOnly(values.document),
-    ...(email === "" ? {} : { email }),
-    ...(values.paymentTermsDays.trim() === ""
-      ? {}
-      : { paymentTermsDays: Number(values.paymentTermsDays) }),
-  };
-}
-
 /**
  * The customers surface: list for everyone signed in, and the create/edit
  * form too — business-rules §4 is wider here than anywhere else ("Create/edit
  * customer" is ADMIN/MANAGER/EMPLOYEE: the clerk registers the walk-in at the
  * counter). Only the *deactivation* control is ADMIN/MANAGER. UI hides by
  * role, the backend re-checks every request independently
- * (frontend-architecture §State).
+ * (frontend-architecture §State). The party field rules themselves live once
+ * in `lib/forms/party.ts`.
  */
 export function CustomersPanel() {
   const { user } = useAuth();
@@ -82,7 +41,7 @@ export function CustomersPanel() {
     reset,
     setError,
     formState: { errors },
-  } = useForm<CustomerValues>({ defaultValues: EMPTY });
+  } = useForm<PartyValues>({ defaultValues: PARTY_EMPTY });
 
   const [refusal, setRefusal] = useState<string | null>(null);
   // The row being edited, if any: the same form doubles as create and edit
@@ -102,7 +61,7 @@ export function CustomersPanel() {
   // One router for both refusal channels — shared with the categories,
   // products and suppliers panels (lib/api/refusal.ts), so the routing rule
   // cannot drift panel-to-panel.
-  const { handleRefusal, rowActionRefused } = refusalHandlers<CustomerValues>({
+  const { handleRefusal, rowActionRefused } = refusalHandlers<PartyValues>({
     setError,
     setRefusal,
   });
@@ -118,36 +77,36 @@ export function CustomersPanel() {
   });
 
   const edit = useMutation({
-    mutationFn: ({ id, values }: { id: number; values: CustomerValues }) =>
-      writeJson<Customer>(`/api/customers/${id}`, "PUT", toBody(values)),
+    mutationFn: ({ id, values }: { id: number; values: PartyValues }) =>
+      writeJson<Customer>(`/api/customers/${id}`, "PUT", partyToBody(values)),
     // Close the form and refetch: the row's new values come back from the
     // API, never from what we typed.
     onSuccess: async () => {
       setEditing(null);
       setRefusal(null);
-      reset(EMPTY);
+      reset(PARTY_EMPTY);
       await queryClient.invalidateQueries({ queryKey: CUSTOMERS_KEY });
     },
     onError: handleRefusal,
   });
 
   const create = useMutation({
-    mutationFn: (values: CustomerValues) =>
-      writeJson<Customer>("/api/customers", "POST", toBody(values)),
+    mutationFn: (values: PartyValues) =>
+      writeJson<Customer>("/api/customers", "POST", partyToBody(values)),
     // Only the refetch after the write can bring the new row in, so the list
     // must be invalidated — not optimistically patched.
     onSuccess: async () => {
       setRefusal(null);
-      reset(EMPTY);
+      reset(PARTY_EMPTY);
       await queryClient.invalidateQueries({ queryKey: CUSTOMERS_KEY });
     },
     onError: handleRefusal,
   });
 
   const submit = handleSubmit((values) => {
-    const parsed = customerSchema.safeParse(values);
+    const parsed = partySchema.safeParse(values);
     if (!parsed.success) {
-      setError(parsed.error.issues[0].path[0] as keyof CustomerValues, {
+      setError(parsed.error.issues[0].path[0] as keyof PartyValues, {
         message: parsed.error.issues[0].message,
       });
       return;
@@ -163,7 +122,7 @@ export function CustomersPanel() {
   // The document box is the one field that formats what it holds (the others
   // are plain text): the mask re-spells each keystroke — CPF up to 11 digits,
   // CNPJ from the 12th on — so the value in the box is presentation and
-  // `toBody` is the only place that decides what the API is sent.
+  // `partyToBody` is the only place that decides what the API is sent.
   const document = useWatch({ control, name: "document" });
 
   return (
