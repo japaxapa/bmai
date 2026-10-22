@@ -5,7 +5,7 @@ A fictional Brazilian B2B wholesale distributor. Buys physical products from sup
 ## Parties
 
 **Customer**:
-A business that buys products on credit.
+A business that buys products on credit. Identified by a CPF/CNPJ-style document — one party, one document, so two rows may never hold the same one, stored in canonical form (digits only). Retiring a customer is a status flip: GLOSSARY "Deactivated".
 _Avoid_: Client, buyer, account
 
 **Supplier**:
