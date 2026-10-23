@@ -27,7 +27,12 @@ import { usePageParam } from "@/hooks/use-page-param";
  */
 export function CustomersPanel() {
   const { user } = useAuth();
-  const canWrite = user !== null;
+  // Business-rules §4's write list, enumerated the way both @PreAuthorize and
+  // the supplier/product panels do it: a role outside the list (a future
+  // fourth role the API would 403) never sees controls that only 403 on
+  // submit — "any signed-in role" would show them.
+  const canWrite =
+    user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "EMPLOYEE";
   // ...but retiring a customer is a supervisor's call (business-rules §4
   // row "Deactivate customer"): the clerk registers and edits the walk-in
   // party, only ADMIN/MANAGER switch one off.

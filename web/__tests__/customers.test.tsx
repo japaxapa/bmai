@@ -293,6 +293,26 @@ describe("customers panel", () => {
     expect(await screen.findByText("Mercado Acme")).toBeInTheDocument();
   });
 
+  // The other half of the same cell: UI hides by *enumerated* role, the way
+  // the supplier and product panels do and the way @PreAuthorize does — a
+  // role outside the business-rules §4 write list (a future fourth role the
+  // backend would 403) must never be shown controls that only 403 on submit.
+  test("hides the write controls from a role outside the write list", async () => {
+    signInAs("VIEWER" as Role, "viewer@bms.local");
+    server.use(
+      http.get(CUSTOMERS_URL, () =>
+        HttpResponse.json(makeEnvelope([ACME_ROW])),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Mercado Acme")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create customer" }),
+    ).toBeNull();
+  });
+
   test("switches a customer off from its row and says so", async () => {
     signInAs("ADMIN", "admin@bms.local");
     let active = true;
