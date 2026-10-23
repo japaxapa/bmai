@@ -165,6 +165,95 @@ class FlywayMigrationsTest {
     }
 
     /**
+     * Ticket #8, AC "Constraint violations return 409/422": the customer
+     * (V7) carries the same party identity as the supplier — one document,
+     * one party — so the duplicate is refused by the database itself, never
+     * by a service remembering to check first.
+     *
+     * <p>Same exact-digits index as V6's: a CPF/CNPJ has no case to fold,
+     * and the two spellings collide before the index sees them (the entity
+     * strips the punctuation) — what the index then refuses is the digits.
+     */
+    @Test
+    void theUniqueCustomerDocumentIndexBitesAtTheDatabaseLevel() {
+        jdbc.update("""
+                        insert into customers (name, document)
+                        values (?, ?)
+                        """, "Mercado Rio Doce ME", "12345678000195");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                        insert into customers (name, document)
+                        values (?, ?)
+                        """, "Mercado Rio Doce duplicada", "12345678000195"))
+                .as("the index refuses the second row on the digits alone")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * The other V6 cell, on the customer twin: terms are ≥ 0 days
+     * (business-rules §3 — "Net 30" and every shorter window are legal;
+     * negative days are not a window). −5 bites, and 0 is *stored*, pinning
+     * the floor as inclusive — a CHECK one notch too tight would silently
+     * refuse the same-day terms the API's own guard lets through.
+     */
+    @Test
+    void theCustomerPaymentTermsCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() -> jdbc.update("""
+                        insert into customers (name, document, payment_terms_days)
+                        values (?, ?, ?)
+                        """, "Prazo negativo ME", "33445566000188", -5))
+                .as("negative days is not a payment window")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatCode(() -> jdbc.update("""
+                        insert into customers (name, document, payment_terms_days)
+                        values (?, ?, ?)
+                        """, "Mesmo dia ME", "44556677000199", 0))
+                .as("zero is the floor, and the floor is inclusive")
+                .doesNotThrowAnyException();
+    }
+
+    /**
+     * V7's name cell — the supplier CHECK's twin (business-rules §5: 1–120
+     * chars). Both edges bite for a writer that bypasses the API. The
+     * document fixture is a well-formed CNPJ on purpose: a malformed one
+     * would let the document-length CHECK bite first, and the test would
+     * then pass for the wrong constraint.
+     */
+    @Test
+    void theCustomerNameLengthCheckBitesAtTheDatabaseLevel() {
+        assertThatThrownBy(() -> jdbc.update(
+                        "insert into customers (name, document) values (?, ?)",
+                        "x".repeat(121), "22334455000177"))
+                .as("the 120-char cap is a CHECK, not only an @Size")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThatThrownBy(() -> jdbc.update(
+                        "insert into customers (name, document) values (?, ?)",
+                        "", "22334455000177"))
+                .as("the 1-char floor is the same CHECK")
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * V6's length CHECK, on the customer twin (V7): 11 digits is a CPF, 14 a
+     * CNPJ, anything else is not a document this domain holds. The check
+     * *digits* stay on the entity (ADR 0017) — a modulus-11 checksum is
+     * arithmetic, not a CHECK — so this is the shape half, and the backstop
+     * for a writer that is not the API.
+     */
+    @Test
+    void theCustomerDocumentLengthCheckBitesAtTheDatabaseLevel() {
+        for (var length : new int[] {10, 12, 13, 15}) {
+            assertThatThrownBy(() -> jdbc.update(
+                            "insert into customers (name, document) values (?, ?)",
+                            "Documento torto", "1".repeat(length)))
+                    .as("%d digits is neither a CPF nor a CNPJ".formatted(length))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        }
+    }
+
+    /**
      * V6's length CHECK: 11 digits is a CPF, 14 a CNPJ, anything else is not
      * a document. The check *digits* stay on the entity (ADR 0017) — a
      * modulus-11 checksum is arithmetic, not a CHECK — so this is the shape

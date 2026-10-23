@@ -19,7 +19,15 @@ auth:       POST /api/auth/login  POST /api/auth/logout  GET /api/auth/me
             PUT /api/auth/password (needs current password)
 users:      CRUD (ADMIN) + PUT /users/{id}/status
 categories: CRUD (ADMIN) + PUT /categories/{id}/status — list open to any signed-in role; name 1–120 chars, unique ignoring case
-customers: CRUD + status + search/filter/pagination
+customers: CRUD + status + `?search=` (ILIKE on name, and on the document
+  normalized to digits — same predicate as suppliers) + pagination — list open to
+  any signed-in role, create/edit ADMIN/MANAGER/EMPLOYEE, deactivation
+  ADMIN/MANAGER (business-rules §4 — the widest write cell in the matrix).
+  document travels in canonical form — digits only, punctuation stripped on the
+  way in —, is unique (409; the sentence quotes the canonical spelling), and
+  must be 11 digits (CPF) or 14 (CNPJ) whose check digits add up (422 — ADR
+  0017). email optional and never unique; payment terms optional — omitted
+  means the stored default 30, and the response echoes what was stored.
 suppliers: CRUD + status + `?search=` (ILIKE on name, and on the document normalized to
   digits — the punctuated CPF/CNPJ a person types still finds the row stored as digits) +
   pagination — list open to any signed-in role, writes ADMIN/MANAGER (business-rules §4).

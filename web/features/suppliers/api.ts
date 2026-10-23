@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { apiBaseUrl } from "@/lib/api/base-url";
+import type { PartyBody } from "@/lib/forms/party";
 import type { PagedEnvelope } from "@/types/paged-envelope";
 
 /**
@@ -21,18 +22,10 @@ export type Supplier = {
 };
 
 /**
- * What the write DTO takes (create and edit share the whole shape).
- * `email` and `paymentTermsDays` are optional: contact info a party may not
- * have yet, and terms the database is born with at 30 (business-rules §3) —
- * an empty box stays *out* of the body, so the server's own default is the
- * one that applies.
+ * The party write shape — one home in `lib/forms/party.ts` (create and edit
+ * share it; the features keep the DTO name their modules speak).
  */
-export type SupplierBody = {
-  name: string;
-  document: string;
-  email?: string | null;
-  paymentTermsDays?: number;
-};
+export type SupplierBody = PartyBody;
 
 export const SUPPLIERS_KEY = ["suppliers"] as const;
 

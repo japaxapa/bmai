@@ -1,5 +1,6 @@
 package com.example.bms.product;
 
+import com.example.bms.shared.LikeTerm;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -62,7 +63,7 @@ public class JdbcProductRepository implements ProductRepository {
 
     @Override
     public List<ProductRow> findAll(int page, int size, String search) {
-        var term = likeTerm(search);
+        var term = LikeTerm.of(search);
         // lower(p.sku) in ORDER BY matches the V4 index's notion of a SKU,
         // so the list orders the same way uniqueness compares.
         var sql = "select " + COLUMNS + ", c.name as category_name, s.name as supplier_name "
@@ -81,7 +82,7 @@ public class JdbcProductRepository implements ProductRepository {
 
     @Override
     public long count(String search) {
-        var term = likeTerm(search);
+        var term = LikeTerm.of(search);
         // Same alias as findAll's, so SEARCH_PREDICATE reads identically
         // here; the categories join is not needed for counting.
         if (term == null) {
@@ -132,20 +133,5 @@ public class JdbcProductRepository implements ProductRepository {
                 product.stock(), product.categoryId(), product.supplierId(),
                 product.active(), product.id());
         return product;
-    }
-
-    /**
-     * The ILIKE term for a live search: wildcards the user typed are data,
-     * not syntax — '%' in a search box must find a literal '%', not every
-     * row. Blank (or absent) means no filter.
-     */
-    private static String likeTerm(String search) {
-        if (search == null || search.isBlank()) {
-            return null;
-        }
-        return "%" + search.trim()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_") + "%";
     }
 }
