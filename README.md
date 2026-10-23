@@ -63,7 +63,7 @@ Suppliers live on `/suppliers`, readable by every signed-in role (the product fo
 
 ![Suppliers: create form mid-fill with the CPF/CNPJ mask applied and the duplicate-document 409 rendered inline; three rows, one marked Deactivated](assets/suppliers.png)
 
-Customers live on `/customers`, readable by every signed-in role — and writable by every role as well, the matrix's widest cell (business-rules §4: the clerk registers the walk-in party; only ADMIN/MANAGER retire one, so Deactivate/Reactivate is hidden from EMPLOYEE). Same party rules as suppliers: the box masks the CPF/CNPJ as you type, the API stores the digits only, one party holds one document, and a repeat is refused with the sentence rendered inline. Payment terms default to 30 when the box is left empty, and a switched-off customer stays in the list, marked:
+Customers live on `/customers`, readable by every signed-in role — and writable by ADMIN, MANAGER and EMPLOYEE as well, the matrix's widest cell (business-rules §4: the clerk registers the walk-in party; only ADMIN/MANAGER retire one, so Deactivate/Reactivate is hidden from EMPLOYEE). Same party rules as suppliers: the box masks the CPF/CNPJ as you type, the API stores the digits only, one party holds one document, and a repeat is refused with the sentence rendered inline. Payment terms default to 30 when the box is left empty, and a switched-off customer stays in the list, marked:
 
 ![Customers: create form mid-fill with the CPF/CNPJ mask applied and the duplicate-document 409 rendered inline; three rows, one marked Deactivated](assets/customers.png)
 
