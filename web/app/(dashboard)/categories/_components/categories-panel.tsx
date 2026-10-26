@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { RowActions } from "@/components/shared/row-actions";
 import { PagedList } from "@/components/shared/paged-list";
 import {
   categoriesQuery,
@@ -162,37 +163,25 @@ export function CategoriesPanel() {
               <span className="w-24 text-sm text-neutral-500">
                 {category.active ? "Active" : "Deactivated"}
               </span>
-              {isAdmin && (
-                <>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${category.name}`}
-                    onClick={() => {
-                      // Seed the open form from the row itself — no second
-                      // fetch to fill it in (testing-strategy §4).
-                      setEditing(category);
-                      setRefusal(null);
-                      reset({ name: category.name });
-                    }}
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`${category.active ? "Deactivate" : "Reactivate"} ${category.name}`}
-                    onClick={() =>
-                      changeStatus.mutate({
-                        id: category.id,
-                        active: !category.active,
-                      })
-                    }
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    {category.active ? "Deactivate" : "Reactivate"}
-                  </button>
-                </>
-              )}
+              <RowActions
+                name={category.name}
+                active={category.active}
+                canEdit={isAdmin}
+                canDeactivate={isAdmin}
+                onEdit={() => {
+                  // Seed the open form from the row itself — no second
+                  // fetch to fill it in (testing-strategy §4).
+                  setEditing(category);
+                  setRefusal(null);
+                  reset({ name: category.name });
+                }}
+                onToggleStatus={() =>
+                  changeStatus.mutate({
+                    id: category.id,
+                    active: !category.active,
+                  })
+                }
+              />
             </li>
           ))}
         </ul>

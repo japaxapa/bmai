@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
+import { RowActions } from "@/components/shared/row-actions";
 import { PagedList } from "@/components/shared/paged-list";
 import {
   CUSTOMERS_KEY,
@@ -315,26 +316,14 @@ function CustomerRow({
       <span className="w-24 text-sm text-neutral-500">
         {customer.active ? "Active" : "Deactivated"}
       </span>
-      {canWrite && (
-        <button
-          type="button"
-          aria-label={`Edit ${customer.name}`}
-          onClick={onEdit}
-          className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-        >
-          Edit
-        </button>
-      )}
-      {canDeactivate && (
-        <button
-          type="button"
-          aria-label={`${customer.active ? "Deactivate" : "Reactivate"} ${customer.name}`}
-          onClick={onToggleStatus}
-          className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-        >
-          {customer.active ? "Deactivate" : "Reactivate"}
-        </button>
-      )}
+      <RowActions
+        name={customer.name}
+        active={customer.active}
+        canEdit={canWrite}
+        canDeactivate={canDeactivate}
+        onEdit={onEdit}
+        onToggleStatus={onToggleStatus}
+      />
     </li>
   );
 }

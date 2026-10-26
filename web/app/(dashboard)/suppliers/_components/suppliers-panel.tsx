@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
+import { RowActions } from "@/components/shared/row-actions";
 import { PagedList } from "@/components/shared/paged-list";
 import {
   SUPPLIERS_KEY,
@@ -254,44 +255,32 @@ export function SuppliersPanel() {
               <span className="w-24 text-sm text-neutral-500">
                 {supplier.active ? "Active" : "Deactivated"}
               </span>
-              {canWrite && (
-                <>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${supplier.name}`}
-                    onClick={() => {
-                      // Seed the open form from the row itself — no second
-                      // fetch to fill it in (testing-strategy §4). The
-                      // document arrives spelled for reading, exactly as the
-                      // box will keep spelling it.
-                      setEditing(supplier);
-                      setRefusal(null);
-                      reset({
-                        name: supplier.name,
-                        document: formatDocument(supplier.document),
-                        email: supplier.email ?? "",
-                        paymentTermsDays: String(supplier.paymentTermsDays),
-                      });
-                    }}
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`${supplier.active ? "Deactivate" : "Reactivate"} ${supplier.name}`}
-                    onClick={() =>
-                      changeStatus.mutate({
-                        id: supplier.id,
-                        active: !supplier.active,
-                      })
-                    }
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    {supplier.active ? "Deactivate" : "Reactivate"}
-                  </button>
-                </>
-              )}
+              <RowActions
+                name={supplier.name}
+                active={supplier.active}
+                canEdit={canWrite}
+                canDeactivate={canWrite}
+                onEdit={() => {
+                  // Seed the open form from the row itself — no second
+                  // fetch to fill it in (testing-strategy §4). The
+                  // document arrives spelled for reading, exactly as the
+                  // box will keep spelling it.
+                  setEditing(supplier);
+                  setRefusal(null);
+                  reset({
+                    name: supplier.name,
+                    document: formatDocument(supplier.document),
+                    email: supplier.email ?? "",
+                    paymentTermsDays: String(supplier.paymentTermsDays),
+                  });
+                }}
+                onToggleStatus={() =>
+                  changeStatus.mutate({
+                    id: supplier.id,
+                    active: !supplier.active,
+                  })
+                }
+              />
             </li>
           ))}
         </ul>
