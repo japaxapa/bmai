@@ -21,11 +21,12 @@ export const ROLE_GATES: readonly {
   { prefix: "/finance", roles: ["ADMIN", "MANAGER"] },
   { prefix: "/users", roles: ["ADMIN"] },
   // /customers, /categories and /suppliers are unlisted on purpose: any
-  // signed-in role may read those vocabularies (business-rules §4) — the
-  // supplier list is also what the product form's dropdown reads, and the
-  // customer list is what a clerk opens a sale against —, writes are
-  // ADMIN/MANAGER via @PreAuthorize (customers' create/edit also EMPLOYEE,
-  // the matrix's widest cell; only its deactivation is ADMIN/MANAGER).
+  // signed-in role may read them (business-rules §4). Categories and
+  // suppliers are vocabularies every role reads (the product form's
+  // dropdowns); the customer list is what a clerk opens a sale against.
+  // Writes are ADMIN/MANAGER via @PreAuthorize (customers' create/edit
+  // also EMPLOYEE, the matrix's widest cell; only its deactivation is
+  // ADMIN/MANAGER).
 ];
 
 /**
