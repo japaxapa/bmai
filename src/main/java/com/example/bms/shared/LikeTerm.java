@@ -1,5 +1,7 @@
 package com.example.bms.shared;
 
+import java.util.Arrays;
+
 /**
  * The ILIKE term for a live search, in one place: wildcards the user typed
  * are data, not syntax — '%' in a search box must find a literal '%', not
@@ -34,5 +36,25 @@ public final class LikeTerm {
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_") + "%";
+    }
+
+    /**
+     * The WHERE fragment for a multi-column ILIKE search: one
+     * {@code ilike ? escape '\'} per column, OR-ed together. The escape
+     * literal pairs with {@link #of()}'s escaping — if one changes, the
+     * other must change with it, which is why they live in this class.
+     *
+     * <p>The caller must pass the parameters in the same order as the
+     * columns (each column consumes one {@code ?} placeholder).
+     *
+     * @param columns the columns to search, qualified with their table
+     *                alias (e.g. {@code "c.name", "c.document"})
+     * @return the fragment, ready to insert after {@code where }
+     */
+    public static String predicate(String... columns) {
+        return String.join(" or ",
+                Arrays.stream(columns)
+                        .map(column -> column + " ilike ? escape '\\'")
+                        .toList());
     }
 }

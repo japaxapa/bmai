@@ -31,7 +31,7 @@ public class JdbcProductRepository implements ProductRepository {
      * once.
      */
     private static final String SEARCH_PREDICATE =
-            "p.sku ilike ? escape '\\' or p.name ilike ? escape '\\'";
+            LikeTerm.predicate("p.sku", "p.name");
 
     /**
      * One mapping, used by every read: the join's category name rides along,

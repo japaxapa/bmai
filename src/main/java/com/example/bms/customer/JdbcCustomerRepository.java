@@ -34,7 +34,7 @@ public class JdbcCustomerRepository implements CustomerRepository {
      * name half must still match what was typed, digits stripped out and all.
      */
     private static final String SEARCH_PREDICATE =
-            "c.name ilike ? escape '\\' or c.document ilike ? escape '\\'";
+            LikeTerm.predicate("c.name", "c.document");
 
     /** One mapping, used by every read. */
     private static final RowMapper<Customer> CUSTOMER_ROW = (rs, rowNum) ->

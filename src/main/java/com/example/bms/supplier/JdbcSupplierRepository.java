@@ -34,7 +34,7 @@ public class JdbcSupplierRepository implements SupplierRepository {
      * name half must still match what was typed, digits stripped out and all.
      */
     private static final String SEARCH_PREDICATE =
-            "s.name ilike ? escape '\\' or s.document ilike ? escape '\\'";
+            LikeTerm.predicate("s.name", "s.document");
 
     /** One mapping, used by every read. */
     private static final RowMapper<Supplier> SUPPLIER_ROW = (rs, rowNum) ->
