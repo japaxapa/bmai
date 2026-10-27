@@ -1,5 +1,6 @@
 package com.example.bms.auth;
 
+import com.example.bms.shared.CanonicalForm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,8 +9,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-
-import java.util.Locale;
 
 /**
  * Applies ADMIN_EMAIL / ADMIN_PASSWORD to the seeded admin (requirements §2:
@@ -63,12 +62,10 @@ public class AdminSeeder implements ApplicationRunner {
         }
 
         var admin = admins.get(0);
-        // Canonical form (GLOSSARY): trimmed and lowercased with Locale.ROOT,
-        // never the no-arg form — that one reads the JVM default locale, and
-        // under tr-TR it stores a dotless "ı" where Postgres lower() folds
-        // "I" to "i", so the row would disagree with the database's own
-        // canonical form and a second spelling could become a second row.
-        var email = configuredEmail.isBlank() ? admin.email() : configuredEmail.trim().toLowerCase(Locale.ROOT);
+        // Canonical form (GLOSSARY): the fold — trimmed, Locale.ROOT, and
+        // why never the no-arg form — is CanonicalForm's one copy, shared
+        // with the login lookup.
+        var email = configuredEmail.isBlank() ? admin.email() : CanonicalForm.lowercaseTrimmed(configuredEmail);
         var passwordHash = configuredPassword.isBlank() || passwordEncoder.matches(configuredPassword, admin.passwordHash())
                 ? admin.passwordHash()
                 : passwordEncoder.encode(configuredPassword);

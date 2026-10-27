@@ -1,7 +1,8 @@
 package com.example.bms.product;
 
+import com.example.bms.shared.CanonicalForm;
+
 import java.math.BigDecimal;
-import java.util.Locale;
 
 /**
  * A product row (GLOSSARY Product): a physical good we buy and resell,
@@ -46,15 +47,14 @@ public record Product(
      * <p>The SKU is <em>canonicalized</em>, not guarded (GLOSSARY "Canonical
      * form"): trimmed and lowercased, so the unique index compares one
      * spelling per identifier — "CAFE-1", "cafe-1" and " CAFE-1 " are the
-     * same SKU here, exactly as the index sees them. Lowercasing is
-     * {@link java.util.Locale#ROOT} on purpose: the no-arg form reads the
-     * JVM default locale, which under tr-TR turns "I" into a dotless ı —
-     * and V5's CHECK plus the lower(sku) index would then disagree with
-     * the entity about what the stored SKU even is. The name is trimmed
-     * only: it is display data, and "Padaria" must stay "Padaria".
+     * same SKU here, exactly as the index sees them. The fold itself is
+     * {@link CanonicalForm#lowercaseTrimmed} — the single home that also
+     * argues why it is {@code Locale.ROOT} and never the JVM default
+     * locale. The name is trimmed only: it is display data, and "Padaria"
+     * must stay "Padaria".
      */
     public Product {
-        sku = sku.trim().toLowerCase(Locale.ROOT);
+        sku = CanonicalForm.lowercaseTrimmed(sku);
         name = name.trim();
         if (price.signum() <= 0) {
             throw new InvalidProductException("Price must be greater than zero.");

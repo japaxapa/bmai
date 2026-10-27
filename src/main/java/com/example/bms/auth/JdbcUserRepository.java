@@ -1,9 +1,9 @@
 package com.example.bms.auth;
 
+import com.example.bms.shared.CanonicalForm;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.util.Locale;
 import java.util.Optional;
 
 @Repository
@@ -18,12 +18,10 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<User> findByEmail(String email) {
         // Emails are stored canonical (V2 constraint), so the lookup applies
-        // the same form to the posted spelling: trimmed and lowercased, so
-        // " ADMIN@BMS.LOCAL " and "admin@bms.local" are one login (GLOSSARY
-        // "Canonical form"). Lowercasing is Locale.ROOT on purpose: the
-        // no-arg form reads the JVM default locale, which under tr-TR turns
-        // "I" into a dotless ı while Postgres lower() folds it to "i" —
-        // a correct password would then miss the row and answer 401.
+        // the same form to the posted spelling: " ADMIN@BMS.LOCAL " and
+        // "admin@bms.local" are one login (GLOSSARY "Canonical form"). The
+        // fold — and why it is Locale.ROOT, never the JVM default — lives in
+        // CanonicalForm, the single copy the writers share.
         // The active flag is part of the same predicate (database-design: a
         // deactivated user's credentials stop answering — deactivation is how
         // this system revokes access, since users are never deleted).
@@ -33,7 +31,7 @@ public class JdbcUserRepository implements UserRepository {
                         rs.getString("email"),
                         rs.getString("password_hash"),
                         Role.valueOf(rs.getString("role"))),
-                email == null ? null : email.trim().toLowerCase(Locale.ROOT));
+                email == null ? null : CanonicalForm.lowercaseTrimmed(email));
         return rows.stream().findFirst();
     }
 }
