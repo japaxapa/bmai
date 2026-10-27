@@ -9,6 +9,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Seam B (agreed with the user): the acceptance criteria end to end — real V2
@@ -117,6 +119,32 @@ class SeededAdminLoginTest {
         } finally {
             Locale.setDefault(deploymentLocale);
         }
+    }
+
+    /**
+     * The collision half of "folds to one stored row" — the way 03bd0d1
+     * pinned SKU with a 409 on the repeat: a differently-cased spelling of
+     * the same email must not become a second row. For email the refusal
+     * is V2's {@code users_email_lowercase} CHECK, not an HTTP 409, because
+     * users are never created through the API and email has no
+     * {@code lower(email)} unique index the way SKU does. The
+     * padded-lowercase spelling passes this CHECK today (it is lowercase,
+     * just not trimmed): refusing *that* one is #57's btrim backstop,
+     * whose bite-test owns the padding half.
+     */
+    @Test
+    void theDatabaseRefusesASecondRowForAnotherSpellingOfTheSameEmail() {
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into users (email, password_hash, role, active) "
+                        + "values (' ADMIN@BMS.LOCAL', 'x', cast('EMPLOYEE' as user_role), true)"))
+                .as("a differently-cased spelling is refused by users_email_lowercase")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from users where lower(btrim(email)) = 'admin@bms.local'",
+                Integer.class))
+                .as("and the seeded row is still the only row that reads as that email")
+                .isEqualTo(1);
     }
 
     /**
