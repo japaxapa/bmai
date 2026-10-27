@@ -3,6 +3,7 @@ package com.example.bms.auth;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.Locale;
 import java.util.Optional;
 
 @Repository
@@ -16,8 +17,13 @@ public class JdbcUserRepository implements UserRepository {
 
     @Override
     public Optional<User> findByEmail(String email) {
-        // Emails are stored lowercase (V2 constraint), so the lookup normalises
-        // the other half of the comparison: login must not depend on case.
+        // Emails are stored canonical (V2 constraint), so the lookup applies
+        // the same form to the posted spelling: trimmed and lowercased, so
+        // " ADMIN@BMS.LOCAL " and "admin@bms.local" are one login (GLOSSARY
+        // "Canonical form"). Lowercasing is Locale.ROOT on purpose: the
+        // no-arg form reads the JVM default locale, which under tr-TR turns
+        // "I" into a dotless ı while Postgres lower() folds it to "i" —
+        // a correct password would then miss the row and answer 401.
         // The active flag is part of the same predicate (database-design: a
         // deactivated user's credentials stop answering — deactivation is how
         // this system revokes access, since users are never deleted).
@@ -27,7 +33,7 @@ public class JdbcUserRepository implements UserRepository {
                         rs.getString("email"),
                         rs.getString("password_hash"),
                         Role.valueOf(rs.getString("role"))),
-                email == null ? null : email.toLowerCase());
+                email == null ? null : email.trim().toLowerCase(Locale.ROOT));
         return rows.stream().findFirst();
     }
 }
