@@ -67,11 +67,14 @@ class AdminSeederCanonicalFormTest {
      * folds "I" to "i" — the row then disagrees with the database's own
      * idea of the canonical form, and a second spelling of the same email
      * can land as a second row (the exact collapse the rule exists to
-     * prevent). AdminSeeder runs at boot, before any test can set the
-     * locale, so the fold is exercised on the seam the component is
-     * contracted on — {@code ApplicationRunner.run} — with the JVM handed
-     * the locale that deployment would have. The expected answer stays the
-     * database's own {@code lower(btrim(...))}.
+     * prevent).
+     *
+     * <p>Under the fixed code ({@code Locale.ROOT}), the seeder computes
+     * the same canonical email already stored by the boot path, so
+     * {@code ApplicationRunner.run} no-ops (early return). The trap
+     * triggers only when a locale bug makes the computed email differ —
+     * then the runner executes an {@code UPDATE} and this assertion catches
+     * the mismatch against the database's own {@code lower(btrim(...))}.
      */
     @Test
     void seederFoldAgreesWithPostgresEvenOnATurkishJvm() {
