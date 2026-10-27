@@ -79,6 +79,22 @@ public class ProductService {
     }
 
     /**
+     * The product slice another feature needs to put the product on a
+     * document — the order draft copies the current price onto the line and
+     * refuses a deactivated product (business-rules §5). A narrow read:
+     * callers reach this service, never the repository or the entity
+     * (architecture §1), and an unknown id is this feature's own 404.
+     */
+    @Transactional(readOnly = true)
+    public ProductRef findRef(long id) {
+        var product = products.findById(id)
+                .orElseThrow(() -> new ProductNotFoundException(id))
+                .product();
+        return new ProductRef(product.id(), product.sku(), product.name(),
+                product.price(), product.active());
+    }
+
+    /**
      * The supplier name behind an optional id. Null (or absent) means "no
      * supplier yet" and stays null; an id nobody answers for is the supplier
      * feature's own 404, exactly like the required category above — the link

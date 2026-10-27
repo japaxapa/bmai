@@ -15,8 +15,8 @@ PostgreSQL + Flyway SQL migrations. Conventions: **bigint identity PKs**, `numer
 - `suppliers` (V6) — the same party shape: name 1–120 chars (CHECK), `document` **unique** (index on the exact digits — nothing to case-fold in a CPF/CNPJ) and stored in **canonical form**: digits only (entity) with a length CHECK of 11 (CPF) or 14 (CNPJ). The *check digits* are the entity's arithmetic (ADR 0017), not a Postgres rule. email nullable and **not** unique (contact info, not identity), `payment_terms_days DEFAULT 30` (`CHECK >= 0`), active flag.
 - `categories` — name **unique** case-insensitively (functional unique index on `lower(name)`), 1–120 chars (CHECK), stored **trimmed** (CHECK, V5), active flag.
 - `products` — sku **unique** case-insensitively (functional unique index on `lower(sku)`), stored in **canonical form** — trimmed + lowercase (CHECK, V5; GLOSSARY "Canonical form"), name (stored trimmed), description, price (>0), cost (weighted avg ≥0), stock (≥0), minimum_stock (≥0), category FK **NOT NULL** (`ON DELETE RESTRICT`), supplier FK **nullable** (`ON DELETE RESTRICT`, V6 — a product may be listed before anyone has decided who supplies it), active flag. Money columns `numeric(12,2)`; stock `INT`.
-- `orders` — customer FK, status enum (DRAFT, CONFIRMED, PROCESSING, COMPLETED, CANCELLED, RETURNED), total, number `ORD-YYYY-NNNN` unique, timestamps.
-- `order_items` — order FK, product FK, qty (>0), `unit_price` (locked at CONFIRM), `unit_cost` (written at PROCESSING, nullable until then), subtotal.
+- `orders` (V8) — customer FK, status enum (DRAFT, CONFIRMED, PROCESSING, COMPLETED, CANCELLED, RETURNED), `total` (`>= 0`, written from the line subtotals on every save), `number` `ORD-YYYY-NNNN` **unique** (sequence `orders_number_seq`, global rather than reset per year; shape CHECK `^ORD-[0-9]{4}-[0-9]{4,}$`, so a rolled-back draft may leave a gap), timestamps.
+- `order_items` (V8) — order FK, product FK, qty (`> 0` CHECK, the same rule `@Positive` answers as a 400 at the edge), `unit_price` (`> 0`; the product's price copied on every DRAFT save, locked at CONFIRM), `unit_cost` (written at PROCESSING, nullable until then), `subtotal` (`CHECK = quantity × unit_price` — the domain's arithmetic as the backstop for a writer that is not the API), **unique `(order_id, product_id)`** — one line per product.
 - `invoices` — order FK unique (1:1), number `INV-YYYY-NNNN` unique, issue/due dates, total.
 - `credit_notes` — invoice FK, amount, date, reason.
 - `stock_reservations` — order FK, product FK, qty.
@@ -28,9 +28,9 @@ PostgreSQL + Flyway SQL migrations. Conventions: **bigint identity PKs**, `numer
 
 ## Indexes
 
-- All FKs. `products(lower(sku))` unique. `suppliers(document)` and `customers(document)` unique (exact digits). `products(supplier_id)`. `orders(customer_id, created_at DESC)`, `orders(status)`. `movements(product_id, created_at)`. `invoices(due_date)`. `financial_transactions(occurred_on)`, `(invoice_id)`, `(payable_id)`.
+- All FKs. `products(lower(sku))` unique. `suppliers(document)` and `customers(document)` unique (exact digits). `products(supplier_id)`. `orders(number)` unique, `orders(customer_id, created_at DESC)`, `orders(status)`. `order_items(order_id, product_id)` unique, `order_items(order_id)`. `movements(product_id, created_at)`. `invoices(due_date)`. `financial_transactions(occurred_on)`, `(invoice_id)`, `(payable_id)`.
 - Search = `ILIKE` at this scale; pg_trgm → backlog.
 
 ## Migration order
 
-users → categories → products → canonical text → suppliers (applied, V1–V6) → customers → orders/items → reservations → movements → purchase orders/items → invoices/credit_notes → payables → financial_transactions → seed (40 products, 20 customers, 5 suppliers, ~40 orders over 60 days, ~10 opex rows).
+users → categories → products → canonical text → suppliers (applied, V1–V6) → customers (V7) → orders/items (V8, applied) → reservations → movements → purchase orders/items → invoices/credit_notes → payables → financial_transactions → seed (40 products, 20 customers, 5 suppliers, ~40 orders over 60 days, ~10 opex rows).
