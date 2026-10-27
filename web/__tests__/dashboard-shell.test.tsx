@@ -89,6 +89,9 @@ describe("dashboard shell", () => {
       expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
       // business-rules §4: the category list reads for every signed-in role.
       expect(screen.getByRole("link", { name: "Categories" })).toBeInTheDocument();
+      // ...and so does the customer list — wider cell for customers: the
+      // clerk opens a sale for the walk-in party (#8).
+      expect(screen.getByRole("link", { name: "Customers" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
     },
   );

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { RowActions } from "@/components/shared/row-actions";
 import { PagedList } from "@/components/shared/paged-list";
 import { categoriesQuery } from "@/features/categories/api";
 import {
@@ -400,46 +401,34 @@ export function ProductsPanel() {
               <span className="w-24 text-sm text-neutral-500">
                 {product.active ? "Active" : "Deactivated"}
               </span>
-              {canWrite && (
-                <>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${product.name}`}
-                    onClick={() => {
-                      // Seed the open form from the row itself — no second
-                      // fetch to fill it in (testing-strategy §4).
-                      setEditing(product);
-                      setRefusal(null);
-                      reset({
-                        sku: product.sku,
-                        name: product.name,
-                        description: product.description ?? "",
-                        price: String(product.price),
-                        cost: String(product.cost),
-                        minimumStock: String(product.minimumStock),
-                        categoryId: String(product.categoryId),
-                        supplierId: String(product.supplierId ?? ""),
-                      });
-                    }}
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`${product.active ? "Deactivate" : "Reactivate"} ${product.name}`}
-                    onClick={() =>
-                      changeStatus.mutate({
-                        id: product.id,
-                        active: !product.active,
-                      })
-                    }
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    {product.active ? "Deactivate" : "Reactivate"}
-                  </button>
-                </>
-              )}
+              <RowActions
+                name={product.name}
+                active={product.active}
+                canEdit={canWrite}
+                canDeactivate={canWrite}
+                onEdit={() => {
+                  // Seed the open form from the row itself — no second
+                  // fetch to fill it in (testing-strategy §4).
+                  setEditing(product);
+                  setRefusal(null);
+                  reset({
+                    sku: product.sku,
+                    name: product.name,
+                    description: product.description ?? "",
+                    price: String(product.price),
+                    cost: String(product.cost),
+                    minimumStock: String(product.minimumStock),
+                    categoryId: String(product.categoryId),
+                    supplierId: String(product.supplierId ?? ""),
+                  });
+                }}
+                onToggleStatus={() =>
+                  changeStatus.mutate({
+                    id: product.id,
+                    active: !product.active,
+                  })
+                }
+              />
             </li>
           ))}
         </ul>

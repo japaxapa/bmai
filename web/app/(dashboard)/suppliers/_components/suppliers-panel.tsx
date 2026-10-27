@@ -3,66 +3,26 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
+import { RowActions } from "@/components/shared/row-actions";
 import { PagedList } from "@/components/shared/paged-list";
 import {
   SUPPLIERS_KEY,
   suppliersQuery,
   type Supplier,
-  type SupplierBody,
 } from "@/features/suppliers/api";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { usePageParam } from "@/hooks/use-page-param";
-import { digitsOnly, formatDocument } from "@/lib/format/document";
-import { optionalNumber } from "@/lib/forms/optional-number";
+import { formatDocument } from "@/lib/format/document";
+import { PARTY_EMPTY, partySchema, partyToBody, type PartyValues } from "@/lib/forms/party";
 import { refusalHandlers } from "@/lib/api/refusal";
 import { writeJson } from "@/lib/api/write";
 import { useAuth } from "@/providers/auth-provider";
-
-// Shape courtesy only (frontend-architecture §Forms): zod gates the empty
-// boxes before they reach the API; react-hook-form owns registration, touched
-// state and where the messages land. No CPF/CNPJ judgement here — the length
-// and the check digits are the *domain's* rules (ADR 0017), answered as a
-// 422 whose sentence this form shows inline like any other refusal. The
-// whitespace-only name is deliberately legal for the same reason: the trim
-// (and therefore the "required") is the server's to apply.
-export const supplierSchema = z.object({
-  name: z.string().min(1, "Name is required."),
-  document: z.string().min(1, "Document is required."),
-  email: z.string(),
-  paymentTermsDays: optionalNumber("Payment terms"),
-});
-
-type SupplierValues = z.infer<typeof supplierSchema>;
-
-const EMPTY: SupplierValues = {
-  name: "",
-  document: "",
-  email: "",
-  paymentTermsDays: "",
-};
-
-/**
- * Form strings → the DTO: the document back to its canonical digits (the mask
- * is presentation — GLOSSARY "Canonical form"), a blank email and blank terms
- * left *out* so the server's own defaults (null, 30) are the ones that apply.
- */
-function toBody(values: SupplierValues): SupplierBody {
-  const email = values.email.trim();
-  return {
-    name: values.name.trim(),
-    document: digitsOnly(values.document),
-    ...(email === "" ? {} : { email }),
-    ...(values.paymentTermsDays.trim() === ""
-      ? {}
-      : { paymentTermsDays: Number(values.paymentTermsDays) }),
-  };
-}
 
 /**
  * The suppliers surface: list for everyone signed in, write controls for
  * ADMIN/MANAGER (business-rules §4) — UI hides by role, the backend
  * re-checks every request independently (frontend-architecture §State).
+ * The party field rules themselves live once in `lib/forms/party.ts`.
  */
 export function SuppliersPanel() {
   const { user } = useAuth();
@@ -76,7 +36,7 @@ export function SuppliersPanel() {
     reset,
     setError,
     formState: { errors },
-  } = useForm<SupplierValues>({ defaultValues: EMPTY });
+  } = useForm<PartyValues>({ defaultValues: PARTY_EMPTY });
 
   const [refusal, setRefusal] = useState<string | null>(null);
   // The row being edited, if any: the same form doubles as create and edit
@@ -96,7 +56,7 @@ export function SuppliersPanel() {
   // One router for both refusal channels — shared with the categories and
   // products panels (lib/api/refusal.ts), so the routing rule cannot drift
   // panel-to-panel.
-  const { handleRefusal, rowActionRefused } = refusalHandlers<SupplierValues>({
+  const { handleRefusal, rowActionRefused } = refusalHandlers<PartyValues>({
     setError,
     setRefusal,
   });
@@ -112,36 +72,36 @@ export function SuppliersPanel() {
   });
 
   const edit = useMutation({
-    mutationFn: ({ id, values }: { id: number; values: SupplierValues }) =>
-      writeJson<Supplier>(`/api/suppliers/${id}`, "PUT", toBody(values)),
+    mutationFn: ({ id, values }: { id: number; values: PartyValues }) =>
+      writeJson<Supplier>(`/api/suppliers/${id}`, "PUT", partyToBody(values)),
     // Close the form and refetch: the row's new values come back from the
     // API, never from what we typed.
     onSuccess: async () => {
       setEditing(null);
       setRefusal(null);
-      reset(EMPTY);
+      reset(PARTY_EMPTY);
       await queryClient.invalidateQueries({ queryKey: SUPPLIERS_KEY });
     },
     onError: handleRefusal,
   });
 
   const create = useMutation({
-    mutationFn: (values: SupplierValues) =>
-      writeJson<Supplier>("/api/suppliers", "POST", toBody(values)),
+    mutationFn: (values: PartyValues) =>
+      writeJson<Supplier>("/api/suppliers", "POST", partyToBody(values)),
     // Only the refetch after the write can bring the new row in, so the list
     // must be invalidated — not optimistically patched.
     onSuccess: async () => {
       setRefusal(null);
-      reset(EMPTY);
+      reset(PARTY_EMPTY);
       await queryClient.invalidateQueries({ queryKey: SUPPLIERS_KEY });
     },
     onError: handleRefusal,
   });
 
   const submit = handleSubmit((values) => {
-    const parsed = supplierSchema.safeParse(values);
+    const parsed = partySchema.safeParse(values);
     if (!parsed.success) {
-      setError(parsed.error.issues[0].path[0] as keyof SupplierValues, {
+      setError(parsed.error.issues[0].path[0] as keyof PartyValues, {
         message: parsed.error.issues[0].message,
       });
       return;
@@ -157,7 +117,7 @@ export function SuppliersPanel() {
   // The document box is the one field that formats what it holds (the others
   // are plain text): the mask re-spells each keystroke — CPF up to 11 digits,
   // CNPJ from the 12th on — so the value in the box is presentation and
-  // `toBody` is the only place that decides what the API is sent.
+  // `partyToBody` is the only place that decides what the API is sent.
   const document = useWatch({ control, name: "document" });
 
   return (
@@ -295,44 +255,32 @@ export function SuppliersPanel() {
               <span className="w-24 text-sm text-neutral-500">
                 {supplier.active ? "Active" : "Deactivated"}
               </span>
-              {canWrite && (
-                <>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${supplier.name}`}
-                    onClick={() => {
-                      // Seed the open form from the row itself — no second
-                      // fetch to fill it in (testing-strategy §4). The
-                      // document arrives spelled for reading, exactly as the
-                      // box will keep spelling it.
-                      setEditing(supplier);
-                      setRefusal(null);
-                      reset({
-                        name: supplier.name,
-                        document: formatDocument(supplier.document),
-                        email: supplier.email ?? "",
-                        paymentTermsDays: String(supplier.paymentTermsDays),
-                      });
-                    }}
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`${supplier.active ? "Deactivate" : "Reactivate"} ${supplier.name}`}
-                    onClick={() =>
-                      changeStatus.mutate({
-                        id: supplier.id,
-                        active: !supplier.active,
-                      })
-                    }
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-                  >
-                    {supplier.active ? "Deactivate" : "Reactivate"}
-                  </button>
-                </>
-              )}
+              <RowActions
+                name={supplier.name}
+                active={supplier.active}
+                canEdit={canWrite}
+                canDeactivate={canWrite}
+                onEdit={() => {
+                  // Seed the open form from the row itself — no second
+                  // fetch to fill it in (testing-strategy §4). The
+                  // document arrives spelled for reading, exactly as the
+                  // box will keep spelling it.
+                  setEditing(supplier);
+                  setRefusal(null);
+                  reset({
+                    name: supplier.name,
+                    document: formatDocument(supplier.document),
+                    email: supplier.email ?? "",
+                    paymentTermsDays: String(supplier.paymentTermsDays),
+                  });
+                }}
+                onToggleStatus={() =>
+                  changeStatus.mutate({
+                    id: supplier.id,
+                    active: !supplier.active,
+                  })
+                }
+              />
             </li>
           ))}
         </ul>

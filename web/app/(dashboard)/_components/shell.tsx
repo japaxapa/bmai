@@ -19,6 +19,7 @@ type NavItem = {
  */
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Dashboard" },
+  { href: "/customers", label: "Customers", roles: rolesFor("/customers") },
   { href: "/categories", label: "Categories", roles: rolesFor("/categories") },
   { href: "/products", label: "Products", roles: rolesFor("/products") },
   { href: "/suppliers", label: "Suppliers", roles: rolesFor("/suppliers") },

@@ -1,6 +1,7 @@
 package com.example.bms.supplier;
 
 import com.example.bms.auth.AuthCookie;
+import com.example.bms.shared.CheckDigits;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
