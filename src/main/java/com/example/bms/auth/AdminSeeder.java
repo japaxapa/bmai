@@ -1,5 +1,6 @@
 package com.example.bms.auth;
 
+import com.example.bms.shared.CanonicalForm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,7 +62,10 @@ public class AdminSeeder implements ApplicationRunner {
         }
 
         var admin = admins.get(0);
-        var email = configuredEmail.isBlank() ? admin.email() : configuredEmail.trim().toLowerCase();
+        // Canonical form (GLOSSARY): the fold — trimmed, Locale.ROOT, and
+        // why never the no-arg form — is CanonicalForm's one copy, shared
+        // with the login lookup.
+        var email = configuredEmail.isBlank() ? admin.email() : CanonicalForm.lowercaseTrimmed(configuredEmail);
         var passwordHash = configuredPassword.isBlank() || passwordEncoder.matches(configuredPassword, admin.passwordHash())
                 ? admin.passwordHash()
                 : passwordEncoder.encode(configuredPassword);

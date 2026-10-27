@@ -9,6 +9,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -19,10 +20,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Seam B (agreed with the user): the acceptance criteria end to end — real V2
@@ -66,6 +69,82 @@ class SeededAdminLoginTest {
         assertThat(field(me(cookie).getBody(), "$.role"))
                 .as("the stored email is lowercase, so the lookup normalises too")
                 .isEqualTo("ADMIN");
+    }
+
+    /**
+     * GLOSSARY "Canonical form" on the login path: the spelling posted is not
+     * what the row is called — the lookup must fold it (trimmed, lowercased)
+     * onto the one stored row, so {@code "  ADMIN@BMS.LOCAL  "} is the same
+     * login as {@code "admin@bms.local"}. The expected form is not restated
+     * the way the implementation computes it: it is the database's own
+     * {@code lower(btrim(...))} of the posted spelling — the very function
+     * that wrote the row (the parity style 03bd0d1 pinned for SKU) — plus the
+     * literal V2 seeded. The token's subject is the stored email, so /me
+     * shows *which* row answered.
+     */
+    @Test
+    void loginFoldsThePostedSpellingOntoTheOneStoredRow() {
+        var posted = "  ADMIN@BMS.LOCAL  ";
+
+        var cookie = sessionCookieAfter(posted, "admin123");
+
+        assertThat(field(me(cookie).getBody(), "$.email"))
+                .as("the fold must equal the database's own lower(btrim()) of the posted spelling")
+                .isEqualTo(jdbc.queryForObject("select lower(btrim(?))", String.class, posted))
+                .isEqualTo("admin@bms.local");
+    }
+
+    /**
+     * The trap 03bd0d1 pinned for SKU, on the email path: the no-arg
+     * {@code toLowerCase()} reads the JVM default locale, and on a tr-TR JVM
+     * it folds "I" into a dotless ı while Postgres {@code lower()} folds it
+     * into "i" — the lookup would then miss the stored row and a correct
+     * password would answer 401, silently, on any deployment whose LANG is
+     * Turkish. The simulation gives the JVM the locale that deployment would
+     * have; the expected answer stays the database's own
+     * {@code lower(btrim(...))}, so entity and database must agree whatever
+     * the default locale is.
+     */
+    @Test
+    void loginFoldAgreesWithPostgresEvenOnATurkishJvm() {
+        var posted = "  ADMIN@BMS.LOCAL  ";
+        var deploymentLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            var cookie = sessionCookieAfter(posted, "admin123");
+
+            assertThat(field(me(cookie).getBody(), "$.email"))
+                    .as("entity fold and Postgres lower() must see one email, whatever the JVM's LANG is")
+                    .isEqualTo(jdbc.queryForObject("select lower(btrim(?))", String.class, posted));
+        } finally {
+            Locale.setDefault(deploymentLocale);
+        }
+    }
+
+    /**
+     * The collision half of "folds to one stored row" — the way 03bd0d1
+     * pinned SKU with a 409 on the repeat: a differently-cased spelling of
+     * the same email must not become a second row. For email the refusal
+     * is V2's {@code users_email_lowercase} CHECK, not an HTTP 409, because
+     * users are never created through the API and email has no
+     * {@code lower(email)} unique index the way SKU does. The
+     * padded-lowercase spelling passes this CHECK today (it is lowercase,
+     * just not trimmed): refusing *that* one is #57's btrim backstop,
+     * whose bite-test owns the padding half.
+     */
+    @Test
+    void theDatabaseRefusesASecondRowForAnotherSpellingOfTheSameEmail() {
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into users (email, password_hash, role, active) "
+                        + "values (' ADMIN@BMS.LOCAL', 'x', cast('EMPLOYEE' as user_role), true)"))
+                .as("a differently-cased spelling is refused by users_email_lowercase")
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from users where lower(btrim(email)) = 'admin@bms.local'",
+                Integer.class))
+                .as("and the seeded row is still the only row that reads as that email")
+                .isEqualTo(1);
     }
 
     /**
