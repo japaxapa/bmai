@@ -8,6 +8,7 @@ REST, no `/v1` prefix (deliberate — single-client portfolio API; version when 
 - Filters over nested collections: `GET /orders?customerId=`, `GET /orders?status=`. No `/customers/{id}/orders` duplication.
 - Deactivation = `PUT /{resource}/{id}/status` with `{active}` everywhere (categories, customers, products, suppliers, users).
 - Manual DTO mapping (no MapStruct at this scale). DTOs validated with `@Valid`; domain refusals surface as 409/422 (see Errors).
+- A domain record and its API response DTO may share an identical field shape (e.g. `OrderSummary`/`OrderSummaryResponse`, `Customer`/`CustomerResponse`, `Category`/`CategoryResponse`). This split is deliberate: the repository answer belongs to the domain layer, the response belongs to the API contract, and the hand-written `...Of` mapper lives in exactly one service. It is not duplicated code — do not collapse the two into one type.
 - Numbers `ORD|PO|INV-YYYY-NNNN` generated server-side.
 
 ## Endpoints
