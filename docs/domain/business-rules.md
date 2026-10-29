@@ -10,7 +10,7 @@ DRAFT → CONFIRMED → PROCESSING → COMPLETED
 CANCELLED CANCELLED                   RETURNED
 ```
 
-- DRAFT: freely editable (items, quantities, customer). No stock or money effect.
+- DRAFT: freely editable (items, quantities, customer). Every save re-prices each line from the product (GLOSSARY "Price"); CONFIRM locks the price and applies stock. No stock or money effect while DRAFT.
 - CONFIRMED: validates active customer, all products active and present, `available ≥ qty` per line (re-checked under product-row lock). Creates reservations. Cancellable → releases reservations, zero ledger rows.
 - PROCESSING-entry: releases reservations + writes SALE movements **atomically**. Writes `unitCost` snapshot per item (current `product.cost`).
 - PROCESSING: not cancellable.

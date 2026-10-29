@@ -8,6 +8,7 @@ REST, no `/v1` prefix (deliberate — single-client portfolio API; version when 
 - Filters over nested collections: `GET /orders?customerId=`, `GET /orders?status=`. No `/customers/{id}/orders` duplication.
 - Deactivation = `PUT /{resource}/{id}/status` with `{active}` everywhere (categories, customers, products, suppliers, users).
 - Manual DTO mapping (no MapStruct at this scale). DTOs validated with `@Valid`; domain refusals surface as 409/422 (see Errors).
+- A domain record and its API response DTO may share an identical field shape (e.g. `OrderSummary`/`OrderSummaryResponse`, `Customer`/`CustomerResponse`, `Category`/`CategoryResponse`). This split is deliberate: the repository answer belongs to the domain layer, the response belongs to the API contract, and the hand-written `...Of` mapper lives in exactly one service. It is not duplicated code — do not collapse the two into one type.
 - Numbers `ORD|PO|INV-YYYY-NNNN` generated server-side.
 
 ## Endpoints
@@ -50,6 +51,24 @@ orders:
   GET /api/orders  GET /api/orders/{id}  POST /api/orders
   PUT /api/orders/{id} (draft only)  — no DELETE, ever
   POST /api/orders/{id}/confirm | /start-processing | /complete | /cancel | /return
+
+  The DRAFT half (ticket #9, implemented): `POST` creates a DRAFT with
+  `{customerId, items: [{productId, quantity}]}` and answers `201` with the
+  detail; an empty `items` is legal and totals 0.00. The number is minted from a
+  sequence as `ORD-YYYY-NNNN` — a global counter, so a rolled-back draft leaves a
+  gap (harmless; duplicates are not). `PUT` replaces the *whole* item set (add,
+  remove and re-quantify are one verb) and refuses with `409` unless the order is
+  a DRAFT ("Only DRAFT sales orders can be edited."). Both verbs resolve
+  `customerId` and every `productId` before writing: unknown → `404`, inactive →
+  `422` (business-rules §5 — a deactivation may not gain new lines), the same
+  product twice → `422`. `unitPrice` is copied from the product on every draft
+  save (CONFIRM locks it, ticket #10); `subtotal = quantity × unitPrice` and
+  `total` are computed by the server and echoed — never read from the request.
+  `quantity > 0` and integer is a DTO rule, so a bad value answers `400` with
+  `fieldErrors["items[0].quantity"]` (the list's zero-based index). The list
+  answers summaries (id, number, customer, status, total, createdAt), newest
+  first; `GET /{id}` adds the lines. List open to any signed-in role, writes
+  ADMIN/MANAGER (business-rules §4).
 inventory:
   GET /api/inventory             (stock + available + low-stock flags)
   GET /api/inventory/movements
@@ -78,11 +97,11 @@ One `@RestControllerAdvice` mapping the `BusinessException` hierarchy to `Proble
 
 | Status | Meaning | Example |
 |---|---|---|
-| 400 + `fieldErrors` | DTO shape invalid | price = "abc"; blank category name |
+| 400 + `fieldErrors` | DTO shape invalid | price = "abc"; blank category name; order quantity 0 (`items[0].quantity`) |
 | 401 / 403 | no/bad token / wrong role | employee posts an adjustment |
-| 404 | unknown id | `/orders/999` |
-| 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name; duplicate supplier document |
-| 422 | business rule refuses | cost < 0; price = 0.001 (cents scale); a supplier document that is not a CPF/CNPJ |
+| 404 | unknown id | `/orders/999`; unknown `productId` on a draft |
+| 409 | conflict with state or stock | cancel PROCESSING; insufficient available; duplicate SKU; duplicate category name; duplicate supplier document; edit a non-DRAFT order |
+| 422 | business rule refuses | cost < 0; price = 0.001 (cents scale); a supplier document that is not a CPF/CNPJ; an inactive customer or product on a draft; the same product twice on one order |
 | 500 | unexpected, no stack leak | bug |
 
 Frontend: `fieldErrors` → the field they name; a refusal's `detail` sentence (the 409/422 rows above) → inline where the user was acting; anything else → toast/banner.

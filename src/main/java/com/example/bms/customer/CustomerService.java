@@ -52,6 +52,21 @@ public class CustomerService {
     }
 
     /**
+     * The customer slice another feature needs to put the party on a
+     * document — the order draft reads who it is for and whether it may still
+     * be sold to (business-rules §5). A narrow read like
+     * {@code SupplierService.findName}: the caller reaches this service, never
+     * the repository or the entity (architecture §1), and an unknown id is
+     * this feature's own 404.
+     */
+    @Transactional(readOnly = true)
+    public CustomerRef findRef(long id) {
+        var customer = customers.findById(id)
+                .orElseThrow(() -> new CustomerNotFoundException(id));
+        return new CustomerRef(customer.id(), customer.name(), customer.active());
+    }
+
+    /**
      * Create: business-rules §4 row "Create/edit customer" — ADMIN, MANAGER
      * <em>and EMPLOYEE</em> write (the clerk registers the walk-in party at
      * the counter). The three roles are listed rather than expressed as a
