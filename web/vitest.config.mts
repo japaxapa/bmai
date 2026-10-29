@@ -22,9 +22,19 @@ export default defineConfig({
     // REPLACES vitest's default exclude list, so it must restate everything
     // it cares about (hence the spread above) — plus tests, config files and
     // static assets that never go through the unit suite.
+    //
+    // Thresholds = ratchet floors, not targets (testing-strategy.md): under
+    // them the run fails. Baselines were 92.80 lines / 86.18 branches — floors
+    // sit ~3-4pt under and only ever move UP. Lines and branches get distinct
+    // numbers: branch % is structurally lower (one untested `else` dents it
+    // far more than a line).
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
+      thresholds: {
+        lines: 90,
+        branches: 82,
+      },
       exclude: [
         ...sharedExcludes,
         "test/**",
