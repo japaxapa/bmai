@@ -36,10 +36,22 @@ public record Order(
                 .setScale(2);
     }
 
+    /**
+     * The copy-through every factory below builds on: the fields a caller
+     * owns are arguments, the total is not, because it never is one — the
+     * canonical constructor re-derives it from the items on every construction
+     * (business-rules §1). The {@code total} slot exists only because the
+     * record declares the component, which is why it is written exactly once
+     * here, out where a reader cannot mistake it for a supplied value.
+     */
+    private Order(long id, DocumentNumber number, long customerId, String customerName,
+                  OrderStatus status, List<OrderItem> items, Instant createdAt) {
+        this(id, number, customerId, customerName, status, items, BigDecimal.ZERO, createdAt);
+    }
+
     /** A brand-new draft: no identity or number until the database assigns them. */
     public static Order draft(long customerId, String customerName, List<OrderItem> items) {
-        return new Order(0, null, customerId, customerName, OrderStatus.DRAFT, items,
-                BigDecimal.ZERO, null);
+        return new Order(0, null, customerId, customerName, OrderStatus.DRAFT, items, null);
     }
 
     /**
@@ -48,8 +60,7 @@ public record Order(
      * re-lists the aggregate's fields by hand.
      */
     public Order withIdentity(long id, DocumentNumber number, Instant createdAt) {
-        return new Order(id, number, customerId, customerName, status, items,
-                BigDecimal.ZERO, createdAt);
+        return new Order(id, number, customerId, customerName, status, items, createdAt);
     }
 
     /**
@@ -58,8 +69,7 @@ public record Order(
      * the response the caller sees and the row it stored cannot disagree.
      */
     public Order withItems(List<OrderItem> items) {
-        return new Order(id, number, customerId, customerName, status, items,
-                BigDecimal.ZERO, createdAt);
+        return new Order(id, number, customerId, customerName, status, items, createdAt);
     }
 
     /**
@@ -72,7 +82,6 @@ public record Order(
         if (status != OrderStatus.DRAFT) {
             throw new OrderNotEditableException();
         }
-        return new Order(id, number, customerId, customerName, status, items,
-                BigDecimal.ZERO, createdAt);
+        return new Order(id, number, customerId, customerName, status, items, createdAt);
     }
 }
