@@ -1,5 +1,6 @@
 package com.example.bms.order;
 
+import com.example.bms.shared.DocumentNumber;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -33,7 +34,7 @@ public class JdbcOrderRepository implements OrderRepository {
     private static final RowMapper<OrderSummary> SUMMARY_ROW = (rs, rowNum) ->
             new OrderSummary(
                     rs.getLong("id"),
-                    rs.getString("number"),
+                    DocumentNumber.parse(rs.getString("number")),
                     rs.getLong("customer_id"),
                     rs.getString("customer_name"),
                     OrderStatus.valueOf(rs.getString("status")),
@@ -102,7 +103,7 @@ public class JdbcOrderRepository implements OrderRepository {
     private Order insert(Order order) {
         var sequence = jdbc.queryForObject(
                 "select nextval('orders_number_seq')", Long.class);
-        var number = "ORD-%d-%04d".formatted(
+        var number = DocumentNumber.mint("ORD",
                 LocalDate.now(ZoneOffset.UTC).getYear(), sequence);
         var identity = jdbc.queryForObject("""
                         insert into orders (number, customer_id, status, total)
@@ -112,7 +113,7 @@ public class JdbcOrderRepository implements OrderRepository {
                 (rs, rowNum) -> new Identity(
                         rs.getLong("id"),
                         rs.getObject("created_at", OffsetDateTime.class).toInstant()),
-                number, order.customerId(), order.status().name(), order.total());
+                number.value(), order.customerId(), order.status().name(), order.total());
         var stored = order.withIdentity(identity.id(), number, identity.createdAt());
         return stored.withItems(insertItems(stored.id(), stored.items()));
     }

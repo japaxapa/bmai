@@ -1,5 +1,6 @@
 package com.example.bms.order;
 
+import com.example.bms.shared.DocumentNumber;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -45,7 +46,8 @@ class OrderTest {
     @EnumSource(value = OrderStatus.class,
             names = {"CONFIRMED", "PROCESSING", "COMPLETED", "CANCELLED", "RETURNED"})
     void editingANonDraftOrderIsRefused(OrderStatus status) {
-        var stored = new Order(1, "ORD-2026-0001", 7, "Mercado Aurora ME", status,
+        var stored = new Order(1, DocumentNumber.parse("ORD-2026-0001"), 7,
+                "Mercado Aurora ME", status,
                 List.of(OrderItem.of(11, "cafe-1", "Café Torrado 1kg", 2,
                         new BigDecimal("12.50"))),
                 BigDecimal.ZERO, Instant.parse("2026-10-20T12:00:00Z"));
@@ -65,8 +67,8 @@ class OrderTest {
     @Test
     void editingADraftReplacesItsItemsAndKeepsItsNumber() {
         var createdAt = Instant.parse("2026-10-20T12:00:00Z");
-        var draft = new Order(1, "ORD-2026-0001", 7, "Mercado Aurora ME",
-                OrderStatus.DRAFT,
+        var draft = new Order(1, DocumentNumber.parse("ORD-2026-0001"), 7,
+                "Mercado Aurora ME", OrderStatus.DRAFT,
                 List.of(OrderItem.of(11, "cafe-1", "Café Torrado 1kg", 2,
                         new BigDecimal("12.50"))),
                 BigDecimal.ZERO, createdAt);
@@ -76,7 +78,7 @@ class OrderTest {
                         new BigDecimal("4.10"))));
 
         assertThat(edited.id()).isEqualTo(1);
-        assertThat(edited.number()).isEqualTo("ORD-2026-0001");
+        assertThat(edited.number().value()).isEqualTo("ORD-2026-0001");
         assertThat(edited.status()).isEqualTo(OrderStatus.DRAFT);
         assertThat(edited.createdAt()).isEqualTo(createdAt);
         assertThat(edited.customerId()).isEqualTo(8);

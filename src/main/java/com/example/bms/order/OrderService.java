@@ -130,7 +130,7 @@ public class OrderService {
     /** The detail mapping, in one place. */
     static OrderResponse responseOf(Order order) {
         return new OrderResponse(
-                order.id(), order.number(), order.customerId(), order.customerName(),
+                order.id(), order.number().value(), order.customerId(), order.customerName(),
                 order.status(),
                 order.items().stream().map(item -> new OrderItemResponse(
                         item.id(), item.productId(), item.sku(), item.productName(),
@@ -141,7 +141,7 @@ public class OrderService {
     /** The list mapping, in one place. */
     static OrderSummaryResponse summaryOf(OrderSummary order) {
         return new OrderSummaryResponse(
-                order.id(), order.number(), order.customerId(), order.customerName(),
+                order.id(), order.number().value(), order.customerId(), order.customerName(),
                 order.status(), order.total(), order.createdAt());
     }
 }

@@ -1,5 +1,7 @@
 package com.example.bms.order;
 
+import com.example.bms.shared.DocumentNumber;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 
@@ -10,7 +12,7 @@ import java.time.Instant;
  */
 public record OrderSummary(
         long id,
-        String number,
+        DocumentNumber number,
         long customerId,
         String customerName,
         OrderStatus status,

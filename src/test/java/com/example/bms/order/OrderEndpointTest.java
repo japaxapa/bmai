@@ -6,6 +6,7 @@ import com.example.bms.product.CategoryRepository;
 import com.example.bms.product.Product;
 import com.example.bms.product.ProductRepository;
 import com.example.bms.product.ProductRow;
+import com.example.bms.shared.DocumentNumber;
 import com.example.bms.shared.SecurityConfig;
 import com.example.bms.supplier.SupplierRepository;
 import org.junit.jupiter.api.Test;
@@ -188,11 +189,13 @@ class OrderEndpointTest {
             // Two stored rows with known statuses: one editable draft and one
             // confirmed order, so the edit tests never depend on what an
             // earlier test created.
-            rows.put(50L, new Order(50, "ORD-2026-0050", 7, "Mercado Rio Doce ME",
+            rows.put(50L, new Order(50, DocumentNumber.parse("ORD-2026-0050"), 7,
+                    "Mercado Rio Doce ME",
                     OrderStatus.DRAFT, List.of(OrderItem.of(11, "cafe-1",
                             "Café Torrado 1kg", 2, new BigDecimal("12.50"))),
                     BigDecimal.ZERO, createdAt));
-            rows.put(99L, new Order(99, "ORD-2026-0099", 7, "Mercado Rio Doce ME",
+            rows.put(99L, new Order(99, DocumentNumber.parse("ORD-2026-0099"), 7,
+                    "Mercado Rio Doce ME",
                     OrderStatus.CONFIRMED, List.of(OrderItem.of(11, "cafe-1",
                             "Café Torrado 1kg", 2, new BigDecimal("12.50"))),
                     BigDecimal.ZERO, createdAt));
@@ -222,7 +225,8 @@ class OrderEndpointTest {
                 public Order save(Order order) {
                     var id = order.id() == 0 ? ids.getAndIncrement() : order.id();
                     var stored = order.id() == 0
-                            ? order.withIdentity(id, "ORD-2026-000" + id,
+                            ? order.withIdentity(id,
+                                    DocumentNumber.parse("ORD-2026-000" + id),
                                     Instant.parse("2026-10-27T12:00:00Z"))
                             : order;
                     rows.put(id, stored);

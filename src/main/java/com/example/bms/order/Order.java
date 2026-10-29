@@ -1,5 +1,7 @@
 package com.example.bms.order;
 
+import com.example.bms.shared.DocumentNumber;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -18,7 +20,7 @@ import java.util.List;
  */
 public record Order(
         long id,
-        String number,
+        DocumentNumber number,
         long customerId,
         String customerName,
         OrderStatus status,
@@ -45,7 +47,7 @@ public record Order(
      * creation stamp the database assigned — so the repository never
      * re-lists the aggregate's fields by hand.
      */
-    public Order withIdentity(long id, String number, Instant createdAt) {
+    public Order withIdentity(long id, DocumentNumber number, Instant createdAt) {
         return new Order(id, number, customerId, customerName, status, items,
                 BigDecimal.ZERO, createdAt);
     }
