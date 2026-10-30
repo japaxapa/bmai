@@ -2,6 +2,8 @@
 
 Done = **every domain rule has ≥1 test**, not a coverage %. Testcontainers PostgreSQL everywhere integration is involved — never H2 (constraints and locking must be real).
 
+**Coverage is a ratchet floor, not a target** (issue #60): `verify`/`test:coverage` fail below the configured floors — frontend 90% lines / 82% branches (Vitest), backend 95% lines / 83% branches (JaCoCo). They only ever move **up**, and green floors never make a change "done" without the domain-rule test above. Lines and branches carry different numbers because branch % runs structurally lower.
+
 ## 1. Domain unit tests (pure, no mocks)
 
 JUnit 5 + AssertJ. Every order transition legal + illegal; cancel-vs-return split; availability formula; weighted-average incl. stock-0; balance math (unpaid / partial / overpaid); overdue computation.

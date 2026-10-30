@@ -109,6 +109,57 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<plugin>
+				<!-- JaCoCo: bytecode coverage for the backend (issue #60).
+				     prepare-agent instruments the JVM running the tests;
+				     report writes target/site/jacoco/index.html during verify. -->
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.13</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<!-- Ratchet floors, not targets (testing-strategy.md):
+						     verify fails under them. Baselines were 98.26 lines /
+						     87.41 branches; floors sit ~3-4pt under and only move
+						     UP. Distinct numbers because branch % runs lower. -->
+						<id>check</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<minimum>0.95</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<minimum>0.83</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 
